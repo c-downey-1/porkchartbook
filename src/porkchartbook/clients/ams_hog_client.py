@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime, timedelta
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 MPR_BASE = "https://mpr.datamart.ams.usda.gov/services/v1.1/reports"
@@ -69,7 +70,7 @@ def _fetch_section(report_id, section_name, date_from=None, date_to=None):
     Returns the JSON response as a dict with 'results' list.
     date_from and date_to are datetime objects (or None for all history).
     """
-    url = f"{MPR_BASE}/{report_id}/{section_name}"
+    url = f"{MPR_BASE}/{report_id}/{quote(section_name)}"
 
     if date_from or date_to:
         start = (date_from or datetime(2000, 1, 1)).strftime("%-m/%-d/%Y")
@@ -136,7 +137,7 @@ def fetch_ams_hog_rows(date_from=None, date_to=None):
                 if raw_val in (None, "", "null"):
                     continue
                 try:
-                    value = float(raw_val)
+                    value = float(str(raw_val).replace(",", ""))
                 except (ValueError, TypeError):
                     continue
                 rows.append(

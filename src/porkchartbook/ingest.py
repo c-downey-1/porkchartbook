@@ -49,27 +49,19 @@ NASS_SERIES = [
         "short_desc": "HOGS, MARKET - INVENTORY",
         "label": "Market hog inventory",
     },
-    # Pig crop / litters
-    {
-        "short_desc": "HOGS - LITTERS, MEASURED IN LITTERS",
-        "label": "Hog litters farrowed",
-    },
+    # Pig crop
     {
         "short_desc": "HOGS - PIG CROP, MEASURED IN HEAD",
         "label": "Pig crop (head)",
     },
-    # Slaughter (weekly/monthly FI slaughter)
+    # Slaughter (annual NASS Livestock Slaughter summary)
     {
-        "short_desc": "HOGS - SLAUGHTERED, FEDERALLY INSPECTED, MEASURED IN HEAD",
-        "label": "Hog slaughter FI (head)",
-    },
-    {
-        "short_desc": "HOGS - SLAUGHTERED, FEDERALLY INSPECTED, MEASURED IN LB, LIVE BASIS",
-        "label": "Hog slaughter FI (lb live)",
+        "short_desc": "HOGS - SLAUGHTERED, MEASURED IN HEAD",
+        "label": "Hog slaughter (head)",
     },
     # Pork production
     {
-        "short_desc": "HOGS - PORK, MEASURED IN LB",
+        "short_desc": "HOGS - PRODUCTION, MEASURED IN LB",
         "label": "Pork production (lb)",
     },
     # Prices received

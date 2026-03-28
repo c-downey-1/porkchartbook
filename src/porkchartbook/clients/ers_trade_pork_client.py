@@ -27,48 +27,22 @@ PKG_REL_NS = {"p": "http://schemas.openxmlformats.org/package/2006/relationships
 
 # Section headers that appear in the ERS pork trade workbook.
 # Keys are normalized (lowercased, stripped) section header strings.
+# The current workbook (carcass-weight edition) has two sections only:
+#   "Pork imports" and "Pork exports", units already in the workbook title.
 SECTION_CONFIG = {
-    "pork imports (1,000 pounds)": {
+    "pork imports": {
         "commodity": "pork",
         "flow": "import",
         "product": "pork",
-        "unit": "1,000 pounds",
+        "unit": "1,000 lb carcass wt",
         "section_label": "Pork imports",
     },
-    "pork exports (1,000 pounds)": {
+    "pork exports": {
         "commodity": "pork",
         "flow": "export",
         "product": "pork",
-        "unit": "1,000 pounds",
+        "unit": "1,000 lb carcass wt",
         "section_label": "Pork exports",
-    },
-    "pork variety meat imports (1,000 pounds)": {
-        "commodity": "pork",
-        "flow": "import",
-        "product": "variety_meat",
-        "unit": "1,000 pounds",
-        "section_label": "Pork variety meat imports",
-    },
-    "pork variety meat exports (1,000 pounds)": {
-        "commodity": "pork",
-        "flow": "export",
-        "product": "variety_meat",
-        "unit": "1,000 pounds",
-        "section_label": "Pork variety meat exports",
-    },
-    "live swine imports (head)": {
-        "commodity": "pork",
-        "flow": "import",
-        "product": "live_swine",
-        "unit": "head",
-        "section_label": "Live swine imports",
-    },
-    "live swine exports (head)": {
-        "commodity": "pork",
-        "flow": "export",
-        "product": "live_swine",
-        "unit": "head",
-        "section_label": "Live swine exports",
     },
 }
 
@@ -200,7 +174,8 @@ def parse_workbook_bytes(workbook_bytes, source_url):
 
                 if row_header in SECTION_CONFIG:
                     current_section = SECTION_CONFIG[row_header]
-                    continue
+                    # The section-header row also contains the first country's
+                    # data (B=code, C=country, D..=values) — do NOT continue.
 
                 if not current_section:
                     continue
