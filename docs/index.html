@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>US Pork Industry Executive Dashboard — Innovate Animal Ag</title>
+<meta name="description" content="Free, interactive US pork industry data dashboard powered by USDA data. Herd inventory, slaughter, prices, and trade — updated monthly.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<!-- Microsoft Clarity — activate on launch
+<script type="text/javascript">
+  (function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+  t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+  y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+  })(window, document, "clarity", "script", "CLARITY_PROJECT_ID");
+</script>
+-->
+<style>
+/* ── Reset & base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+body {
+  font-family: 'Lexend', system-ui, sans-serif;
+  background: #f4f5f7;
+  color: #1a2332;
+  line-height: 1.5;
+}
+
+/* ── IAA colors ───────────────────────────────────────────── */
+:root {
+  --navy: #1a2a4a;
+  --teal: #00a79d;
+  --teal-light: #e6f7f6;
+  --gold: #f5a623;
+  --mid: #4a5568;
+  --light: #f4f5f7;
+  --white: #ffffff;
+  --border: #e2e8f0;
+  --shadow: 0 1px 3px rgba(0,0,0,.10);
+}
+
+/* ── Header ───────────────────────────────────────────────── */
+.iaa-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .625rem 1.25rem;
+  background: var(--navy);
+  color: var(--white);
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+.iaa-brand { display: flex; align-items: center; text-decoration: none; }
+.iaa-brand img { height: 36px; filter: brightness(0) invert(1); }
+.iaa-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--white);
+  letter-spacing: .02em;
+}
+@media (max-width: 600px) { .iaa-title { display: none; } }
+
+/* ── Layout ───────────────────────────────────────────────── */
+.shell { display: flex; flex-direction: column; min-height: 100vh; }
+.layout { display: flex; flex: 1; }
+
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: var(--white);
+  border-right: 1px solid var(--border);
+  position: sticky;
+  top: 57px;
+  height: calc(100vh - 57px);
+  overflow-y: auto;
+  padding: 1.25rem 0;
+}
+@media (max-width: 768px) { .sidebar { display: none; } }
+
+.sidebar-nav a {
+  display: block;
+  padding: .5rem 1.25rem;
+  color: var(--mid);
+  text-decoration: none;
+  font-size: .85rem;
+  font-weight: 500;
+  border-left: 3px solid transparent;
+  transition: all .15s;
+}
+.sidebar-nav a:hover, .sidebar-nav a.active {
+  color: var(--teal);
+  border-left-color: var(--teal);
+  background: var(--teal-light);
+}
+.sidebar-section-label {
+  padding: 1rem 1.25rem .375rem;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #9aa5b4;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 1.5rem 1.75rem 3rem;
+  max-width: 1280px;
+}
+@media (max-width: 768px) { .content { padding: 1rem .875rem 2rem; } }
+
+/* ── Mobile nav ───────────────────────────────────────────── */
+.mobile-nav {
+  display: none;
+  padding: .625rem .875rem;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+}
+.mobile-nav select {
+  width: 100%;
+  padding: .5rem;
+  font-family: inherit;
+  font-size: .9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+@media (max-width: 768px) { .mobile-nav { display: block; } }
+
+/* ── KPI row ──────────────────────────────────────────────── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: .875rem;
+  margin-bottom: 2rem;
+}
+@media (max-width: 900px) { .kpi-row { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 540px) { .kpi-row { grid-template-columns: repeat(2, 1fr); } }
+
+.kpi {
+  background: var(--white);
+  border-radius: 8px;
+  padding: 1rem 1.125rem;
+  box-shadow: var(--shadow);
+  border-top: 3px solid var(--teal);
+}
+.kpi .kpi-label { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--mid); }
+.kpi .kpi-value { font-size: 1.6rem; font-weight: 700; color: var(--navy); line-height: 1.15; margin: .25rem 0 .125rem; }
+.kpi .kpi-sub { font-size: .72rem; color: #718096; }
+
+/* ── Section ──────────────────────────────────────────────── */
+.section { margin-bottom: 3rem; }
+.section-head {
+  margin-bottom: 1.25rem;
+  padding-bottom: .75rem;
+  border-bottom: 2px solid var(--border);
+}
+.section-head h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: .125rem;
+}
+.section-head p { font-size: .85rem; color: var(--mid); }
+
+/* ── Chart grid ───────────────────────────────────────────── */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.125rem;
+}
+@media (max-width: 720px) { .chart-grid { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--white);
+  border-radius: 8px;
+  padding: 1rem 1.125rem 1.25rem;
+  box-shadow: var(--shadow);
+}
+.card.full { grid-column: 1 / -1; }
+.card h3 { font-size: .9rem; font-weight: 600; color: var(--navy); }
+.card .card-sub { font-size: .75rem; color: var(--mid); margin-bottom: .75rem; }
+.card canvas { width: 100% !important; }
+
+/* ── Data note ────────────────────────────────────────────── */
+.data-note {
+  margin-top: .5rem;
+  font-size: .7rem;
+  color: #9aa5b4;
+}
+
+/* ── Footer ───────────────────────────────────────────────── */
+.footer {
+  padding: 1.25rem 1.75rem;
+  background: var(--white);
+  border-top: 1px solid var(--border);
+  font-size: .78rem;
+  color: var(--mid);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.footer a { color: var(--teal); text-decoration: none; }
+
+/* ── Loading / error ──────────────────────────────────────── */
+#loadingBanner {
+  padding: 2.5rem;
+  text-align: center;
+  color: var(--mid);
+  font-size: .95rem;
+}
+#errorBanner {
+  display: none;
+  padding: 1rem 1.5rem;
+  background: #fff5f5;
+  border: 1px solid #fc8181;
+  border-radius: 6px;
+  color: #c53030;
+  margin-bottom: 1.5rem;
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- Header -->
+  <header class="iaa-bar">
+    <a class="iaa-brand" href="https://innovateanimalag.org/" target="_blank" rel="noreferrer">
+      <img src="assets/iaa-logo-with-navy-font-full-color.png" alt="Innovate Animal Ag">
+    </a>
+    <span class="iaa-title">US Pork Industry Executive Dashboard</span>
+  </header>
+
+  <!-- Mobile section nav -->
+  <div class="mobile-nav">
+    <select id="mobileSectionSelect" onchange="location.hash=this.value">
+      <option value="">Jump to section…</option>
+      <option value="#overview">Overview</option>
+      <option value="#herd">Herd</option>
+      <option value="#slaughter-production">Slaughter &amp; Production</option>
+      <option value="#prices">Prices</option>
+      <option value="#trade">Trade</option>
+    </select>
+  </div>
+
+  <div class="layout">
+
+    <!-- Sidebar navigation -->
+    <aside class="sidebar">
+      <nav class="sidebar-nav">
+        <div class="sidebar-section-label">Sections</div>
+        <a href="#overview">Overview</a>
+        <a href="#herd">Herd</a>
+        <a href="#slaughter-production">Slaughter &amp; Production</a>
+        <a href="#prices">Prices</a>
+        <a href="#trade">Trade</a>
+      </nav>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content">
+
+      <div id="loadingBanner">Loading dashboard data…</div>
+      <div id="errorBanner"></div>
+
+      <div id="dashboardBody" style="display:none">
+
+        <!-- ── I. Overview ───────────────────────────────── -->
+        <section class="section" id="overview">
+          <div class="section-head">
+            <h2>Overview — Market Snapshot</h2>
+            <p>Key metrics from the latest available USDA data. Updated monthly.</p>
+          </div>
+          <div class="kpi-row">
+            <article class="kpi">
+              <div class="kpi-label">Hog Inventory</div>
+              <div class="kpi-value" id="kpiInventory">—</div>
+              <div class="kpi-sub" id="kpiInventorySub">latest quarterly</div>
+            </article>
+            <article class="kpi">
+              <div class="kpi-label">Weekly Slaughter</div>
+              <div class="kpi-value" id="kpiSlaughter">—</div>
+              <div class="kpi-sub" id="kpiSlaughterSub">head, FI</div>
+            </article>
+            <article class="kpi">
+              <div class="kpi-label">Barrow/Gilt Price</div>
+              <div class="kpi-value" id="kpiPrice">—</div>
+              <div class="kpi-sub" id="kpiPriceSub">$/cwt, base</div>
+            </article>
+            <article class="kpi">
+              <div class="kpi-label">Pork Cutout</div>
+              <div class="kpi-value" id="kpiCutout">—</div>
+              <div class="kpi-sub" id="kpiCutoutSub">$/cwt</div>
+            </article>
+            <article class="kpi">
+              <div class="kpi-label">YTD Exports</div>
+              <div class="kpi-value" id="kpiExports">—</div>
+              <div class="kpi-sub" id="kpiExportsSub">million lbs</div>
+            </article>
+          </div>
+          <div class="chart-grid">
+            <article class="card">
+              <h3>Total Hog Inventory</h3>
+              <div class="card-sub">Millions of head, quarterly — USDA NASS Hogs &amp; Pigs</div>
+              <canvas id="overviewInventoryChart" height="140"></canvas>
+            </article>
+            <article class="card">
+              <h3>Pork Cutout Value</h3>
+              <div class="card-sub">$/cwt, daily — USDA AMS LM_PK602</div>
+              <canvas id="overviewCutoutChart" height="140"></canvas>
+            </article>
+          </div>
+        </section>
+
+        <!-- ── II. Herd ──────────────────────────────────── -->
+        <section class="section" id="herd">
+          <div class="section-head">
+            <h2>Herd</h2>
+            <p>Quarterly Hogs &amp; Pigs report — inventory and pig crop. Source: USDA NASS.</p>
+          </div>
+          <div class="chart-grid">
+            <article class="card full">
+              <h3>Total Hog Inventory (Millions of Head)</h3>
+              <div class="card-sub">All hogs and pigs on US farms, quarterly</div>
+              <canvas id="herdTotalChart" height="120"></canvas>
+            </article>
+            <article class="card">
+              <h3>Breeding vs. Market Hogs</h3>
+              <div class="card-sub">Millions of head, quarterly</div>
+              <canvas id="herdBreedingMarketChart" height="140"></canvas>
+            </article>
+            <article class="card">
+              <h3>Pig Crop</h3>
+              <div class="card-sub">Millions of head per quarter</div>
+              <canvas id="herdPigCropChart" height="140"></canvas>
+            </article>
+          </div>
+        </section>
+
+        <!-- ── III. Slaughter & Production ──────────────── -->
+        <section class="section" id="slaughter-production">
+          <div class="section-head">
+            <h2>Slaughter &amp; Production</h2>
+            <p>Federally inspected slaughter and pork production. Source: USDA NASS, USDA AMS.</p>
+          </div>
+          <div class="chart-grid">
+            <article class="card full">
+              <h3>Weekly Federally Inspected Hog Slaughter</h3>
+              <div class="card-sub">Thousands of head per week — USDA NASS</div>
+              <canvas id="slaughterHeadChart" height="120"></canvas>
+            </article>
+            <article class="card">
+              <h3>Pork Production</h3>
+              <div class="card-sub">Million lbs per month — USDA NASS</div>
+              <canvas id="porkProductionChart" height="140"></canvas>
+            </article>
+            <article class="card">
+              <h3>Average Carcass Weight</h3>
+              <div class="card-sub">Pounds — USDA AMS LM_HG201</div>
+              <canvas id="carcassWeightChart" height="140"></canvas>
+            </article>
+          </div>
+        </section>
+
+        <!-- ── IV. Prices ────────────────────────────────── -->
+        <section class="section" id="prices">
+          <div class="section-head">
+            <h2>Prices</h2>
+            <p>Live hog prices and pork cutout values. Source: USDA AMS, USDA NASS.</p>
+          </div>
+          <div class="chart-grid">
+            <article class="card full">
+              <h3>Barrow &amp; Gilt Live Hog Price</h3>
+              <div class="card-sub">$/cwt — Weighted average base price, USDA AMS LM_HG201 (National Direct)</div>
+              <canvas id="hogPriceChart" height="120"></canvas>
+            </article>
+            <article class="card">
+              <h3>Pork Cutout Value</h3>
+              <div class="card-sub">$/cwt — USDA AMS LM_PK602</div>
+              <canvas id="cutoutChart" height="140"></canvas>
+            </article>
+            <article class="card">
+              <h3>Primal Values</h3>
+              <div class="card-sub">$/cwt — Loin, Ham, Belly, Butt, Rib, Picnic</div>
+              <canvas id="primalsChart" height="140"></canvas>
+            </article>
+          </div>
+        </section>
+
+        <!-- ── V. Trade ──────────────────────────────────── -->
+        <section class="section" id="trade">
+          <div class="section-head">
+            <h2>Trade</h2>
+            <p>Monthly pork import and export volumes. Source: USDA ERS Livestock &amp; Meat International Trade Data. Data typically lags ~6 weeks.</p>
+          </div>
+          <div class="chart-grid">
+            <article class="card full">
+              <h3>Pork Exports vs. Imports</h3>
+              <div class="card-sub">Million lbs per month, pork only (excludes variety meat and live swine)</div>
+              <canvas id="tradeFlowChart" height="120"></canvas>
+            </article>
+            <article class="card">
+              <h3>Top Export Destinations</h3>
+              <div class="card-sub">1,000 lbs per month</div>
+              <canvas id="exportDestinationsChart" height="150"></canvas>
+            </article>
+            <article class="card">
+              <h3>Top Import Sources</h3>
+              <div class="card-sub">1,000 lbs per month</div>
+              <canvas id="importSourcesChart" height="150"></canvas>
+            </article>
+          </div>
+        </section>
+
+      </div><!-- /dashboardBody -->
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span>
+      Data: <a href="https://quickstats.nass.usda.gov/" target="_blank">USDA NASS</a> ·
+      <a href="https://mpr.datamart.ams.usda.gov/" target="_blank">USDA AMS</a> ·
+      <a href="https://www.ers.usda.gov/data-products/livestock-and-meat-international-trade-data/" target="_blank">USDA ERS</a>
+    </span>
+    <span id="footerUpdated">Updated —</span>
+    <span>
+      <a href="https://innovateanimalag.org/" target="_blank">Innovate Animal Ag</a> ·
+      Free to use and share
+    </span>
+  </footer>
+
+</div><!-- /shell -->
+
+<script>
+// ── Color palette ──────────────────────────────────────────────────────
+const NAVY   = '#1a2a4a';
+const TEAL   = '#00a79d';
+const GOLD   = '#f5a623';
+const BLUE   = '#4299e1';
+const RED    = '#e53e3e';
+const GREEN  = '#38a169';
+const PURPLE = '#805ad5';
+const ORANGE = '#dd6b20';
+
+const PALETTE = [TEAL, GOLD, BLUE, RED, GREEN, PURPLE, ORANGE, NAVY];
+
+// ── Chart defaults ─────────────────────────────────────────────────────
+Chart.defaults.font.family = "'Lexend', system-ui, sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#4a5568';
+Chart.defaults.plugins.legend.labels.boxWidth = 10;
+Chart.defaults.plugins.legend.labels.padding = 12;
+
+const LINE_OPTS = {
+  responsive: true,
+  maintainAspectRatio: true,
+  animation: false,
+  plugins: {
+    legend: { position: 'top' },
+    tooltip: { mode: 'index', intersect: false }
+  },
+  scales: {
+    x: { grid: { color: '#f0f0f0' }, ticks: { maxTicksLimit: 12, maxRotation: 45 } },
+    y: { grid: { color: '#f0f0f0' }, ticks: { maxTicksLimit: 6 } }
+  }
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────
+function fmt(value, decimals = 0) {
+  if (value === null || value === undefined) return '—';
+  return Number(value).toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+}
+
+function fmtM(value, decimals = 1) {
+  if (value === null || value === undefined) return '—';
+  return fmt(value / 1e6, decimals) + 'M';
+}
+
+function fmtK(value, decimals = 0) {
+  if (value === null || value === undefined) return '—';
+  return fmt(value / 1e3, decimals) + 'K';
+}
+
+function recent(dates, values, n = 260) {
+  if (!dates || !dates.length) return { dates: [], values: [] };
+  const start = Math.max(0, dates.length - n);
+  return { dates: dates.slice(start), values: values.slice(start) };
+}
+
+function lineChart(id, labels, datasets, opts = {}) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: Object.assign({}, LINE_OPTS, opts)
+  });
+}
+
+function multiLineChart(id, dates, seriesMap, opts = {}) {
+  const colors = PALETTE;
+  const datasets = Object.entries(seriesMap).map(([name, values], i) => ({
+    label: name,
+    data: values,
+    borderColor: colors[i % colors.length],
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    pointRadius: 0,
+    tension: 0.3
+  }));
+  return lineChart(id, dates, datasets, opts);
+}
+
+// ── KPI population ─────────────────────────────────────────────────────
+function populateKpi(kpi) {
+  const inv = kpi.total_hog_inventory;
+  document.getElementById('kpiInventory').textContent =
+    inv && inv.value != null ? fmtM(inv.value * 1000) : '—';
+  document.getElementById('kpiInventorySub').textContent =
+    inv && inv.date ? inv.date : 'latest quarterly';
+
+  const sl = kpi.weekly_slaughter_head;
+  document.getElementById('kpiSlaughter').textContent =
+    sl && sl.value != null ? fmtK(sl.value, 0) : '—';
+  document.getElementById('kpiSlaughterSub').textContent =
+    sl && sl.date ? sl.date : 'head, FI';
+
+  const pr = kpi.barrow_gilt_base_price;
+  document.getElementById('kpiPrice').textContent =
+    pr && pr.value != null ? '$' + fmt(pr.value, 2) : '—';
+  document.getElementById('kpiPriceSub').textContent =
+    pr && pr.date ? pr.date : '$/cwt, base';
+
+  const cu = kpi.pork_cutout_value;
+  document.getElementById('kpiCutout').textContent =
+    cu && cu.value != null ? '$' + fmt(cu.value, 2) : '—';
+  document.getElementById('kpiCutoutSub').textContent =
+    cu && cu.date ? cu.date : '$/cwt';
+
+  const ex = kpi.ytd_export_volume_1000lb;
+  document.getElementById('kpiExports').textContent =
+    ex && ex.value != null ? fmtM(ex.value * 1000, 1) : '—';
+  document.getElementById('kpiExportsSub').textContent =
+    ex && ex.year ? 'lbs YTD ' + ex.year : 'million lbs';
+}
+
+// ── Chart builders ─────────────────────────────────────────────────────
+function buildOverview(kpi, herd, prices) {
+  // Total inventory — last 40 quarters
+  const inv = recent(herd.total_inventory.dates, herd.total_inventory.values, 40);
+  lineChart('overviewInventoryChart', inv.dates,
+    [{ label: 'Hog Inventory (millions)', data: inv.values.map(v => v != null ? v / 1000 : null),
+       borderColor: TEAL, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.3 }]);
+
+  // Cutout — last 2 years of daily
+  const cut = recent(prices.pork_cutout_value.dates, prices.pork_cutout_value.values, 520);
+  lineChart('overviewCutoutChart', cut.dates,
+    [{ label: 'Pork Cutout ($/cwt)', data: cut.values,
+       borderColor: GOLD, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.3 }]);
+}
+
+function buildHerd(herd) {
+  // Total long history
+  const total = herd.total_inventory;
+  lineChart('herdTotalChart', total.dates,
+    [{ label: 'Total Inventory (millions)', data: total.values.map(v => v != null ? v / 1000 : null),
+       borderColor: TEAL, backgroundColor: 'rgba(0,167,157,.1)', fill: true,
+       borderWidth: 2, pointRadius: 0, tension: 0.3 }]);
+
+  // Breeding vs. market — recent 60 quarters
+  const brd = recent(herd.breeding_inventory.dates, herd.breeding_inventory.values, 60);
+  const mkt = recent(herd.market_inventory.dates, herd.market_inventory.values, 60);
+  const allDates = [...new Set([...brd.dates, ...mkt.dates])].sort();
+  const brdMap = Object.fromEntries(brd.dates.map((d, i) => [d, brd.values[i]]));
+  const mktMap = Object.fromEntries(mkt.dates.map((d, i) => [d, mkt.values[i]]));
+  lineChart('herdBreedingMarketChart', allDates, [
+    { label: 'Breeding (thousands)', data: allDates.map(d => brdMap[d] != null ? brdMap[d] : null),
+      borderColor: NAVY, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+    { label: 'Market (thousands)', data: allDates.map(d => mktMap[d] != null ? mktMap[d] : null),
+      borderColor: TEAL, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }
+  ]);
+
+  // Pig crop
+  const pc = herd.pig_crop;
+  if (pc.dates.length) {
+    const pcRecent = recent(pc.dates, pc.values, 60);
+    lineChart('herdPigCropChart', pcRecent.dates,
+      [{ label: 'Pig Crop (thousands)', data: pcRecent.values.map(v => v != null ? v / 1000 : null),
+         borderColor: GOLD, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }]);
+  }
+}
+
+function buildSlaughterProduction(sp) {
+  // Weekly slaughter — last 3 years
+  const sl = recent(sp.slaughter_head.dates, sp.slaughter_head.values, 156);
+  if (sl.dates.length) {
+    lineChart('slaughterHeadChart', sl.dates,
+      [{ label: 'Slaughter (thousands head/week)', data: sl.values.map(v => v != null ? v / 1000 : null),
+         borderColor: TEAL, backgroundColor: 'rgba(0,167,157,.08)', fill: true,
+         borderWidth: 1.5, pointRadius: 0, tension: 0.2 }]);
+  }
+
+  // Pork production
+  const pp = recent(sp.pork_production_lb.dates, sp.pork_production_lb.values, 120);
+  if (pp.dates.length) {
+    lineChart('porkProductionChart', pp.dates,
+      [{ label: 'Pork Production (million lbs)', data: pp.values.map(v => v != null ? v / 1e6 : null),
+         borderColor: NAVY, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }]);
+  }
+
+  // Avg carcass weight
+  const wt = recent(sp.avg_carcass_weight.dates, sp.avg_carcass_weight.values, 520);
+  if (wt.dates.length) {
+    lineChart('carcassWeightChart', wt.dates,
+      [{ label: 'Avg Carcass Weight (lb)', data: wt.values,
+         borderColor: GOLD, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }]);
+  }
+}
+
+function buildPrices(prices) {
+  // Barrow/gilt price — last 2 years
+  const bp = recent(prices.barrow_gilt_base_price.dates, prices.barrow_gilt_base_price.values, 520);
+  const np = recent(prices.barrow_gilt_net_price.dates, prices.barrow_gilt_net_price.values, 520);
+  const allDates = [...new Set([...bp.dates, ...np.dates])].sort().slice(-520);
+  const bpMap = Object.fromEntries(bp.dates.map((d, i) => [d, bp.values[i]]));
+  const npMap = Object.fromEntries(np.dates.map((d, i) => [d, np.values[i]]));
+  lineChart('hogPriceChart', allDates.slice(-260), [
+    { label: 'Base Price ($/cwt)', data: allDates.slice(-260).map(d => bpMap[d] ?? null),
+      borderColor: NAVY, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+    { label: 'Net Price ($/cwt)', data: allDates.slice(-260).map(d => npMap[d] ?? null),
+      borderColor: TEAL, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }
+  ]);
+
+  // Cutout
+  const cu = recent(prices.pork_cutout_value.dates, prices.pork_cutout_value.values, 520);
+  lineChart('cutoutChart', cu.dates,
+    [{ label: 'Pork Cutout ($/cwt)', data: cu.values,
+       borderColor: GOLD, backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }]);
+
+  // Primals stacked
+  if (prices.primals && Object.keys(prices.primals).length) {
+    const primalEntries = Object.entries(prices.primals);
+    const primalDates = [...new Set(primalEntries.flatMap(([, v]) => v.dates))].sort().slice(-260);
+    const primalMaps = Object.fromEntries(primalEntries.map(([name, v]) => [
+      name, Object.fromEntries(v.dates.map((d, i) => [d, v.values[i]]))
+    ]));
+    lineChart('primalsChart', primalDates, primalEntries.map(([name], i) => ({
+      label: name,
+      data: primalDates.map(d => primalMaps[name][d] ?? null),
+      borderColor: PALETTE[i % PALETTE.length],
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.3
+    })));
+  }
+}
+
+function buildTrade(trade) {
+  // Export vs. import totals
+  const td = trade.trade_totals;
+  if (td.dates.length) {
+    lineChart('tradeFlowChart', td.dates, [
+      { label: 'Pork Exports (mil lbs)', data: td.export_pork.map(v => v != null ? v / 1000 : null),
+        borderColor: TEAL, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+      { label: 'Pork Imports (mil lbs)', data: td.import_pork.map(v => v != null ? v / 1000 : null),
+        borderColor: RED, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.3 }
+    ]);
+  }
+
+  // Export destinations
+  const exp = trade.exports_by_destination;
+  if (exp.dates && exp.dates.length) {
+    multiLineChart('exportDestinationsChart', exp.dates.slice(-60),
+      Object.fromEntries(Object.entries(exp.series).map(([c, v]) => [c, v.slice(-60)])));
+  }
+
+  // Import sources
+  const imp = trade.imports_by_source;
+  if (imp.dates && imp.dates.length) {
+    multiLineChart('importSourcesChart', imp.dates.slice(-60),
+      Object.fromEntries(Object.entries(imp.series).map(([c, v]) => [c, v.slice(-60)])));
+  }
+}
+
+// ── Main data load ─────────────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const resp = await fetch('data.json?v=' + Date.now());
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    document.getElementById('loadingBanner').style.display = 'none';
+    document.getElementById('dashboardBody').style.display = 'block';
+
+    if (data.meta && data.meta.updated) {
+      document.getElementById('footerUpdated').textContent = 'Updated ' + data.meta.updated;
+    }
+
+    populateKpi(data.kpi);
+    buildOverview(data.kpi, data.herd, data.prices);
+    buildHerd(data.herd);
+    buildSlaughterProduction(data.slaughter_production);
+    buildPrices(data.prices);
+    buildTrade(data.trade);
+
+  } catch (err) {
+    document.getElementById('loadingBanner').style.display = 'none';
+    const banner = document.getElementById('errorBanner');
+    banner.style.display = 'block';
+    banner.textContent = 'Could not load dashboard data: ' + err.message +
+      '. If you are running locally, serve this folder with a local web server (e.g. python -m http.server 8000).';
+  }
+}
+
+loadDashboard();
+
+// ── Sidebar active state on scroll ────────────────────────────────────
+const sections = document.querySelectorAll('.section[id]');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const id = entry.target.id;
+      navLinks.forEach(a => {
+        a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+      });
+    }
+  });
+}, { threshold: 0.3 });
+sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>

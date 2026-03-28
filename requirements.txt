@@ -1,0 +1,3 @@
+# porkchartbook — Python stdlib only, no third-party packages required.
+# Python >= 3.9 recommended.
+# Uses: urllib, json, csv, sqlite3, re, zipfile, xml.etree.ElementTree
