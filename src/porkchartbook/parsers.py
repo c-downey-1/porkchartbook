@@ -6,6 +6,20 @@ NASS: 1 universal parser for all QuickStats records.
 
 from __future__ import annotations
 
+from datetime import datetime
+
+
+def normalize_date(date_str):
+    """Convert common source dates to YYYY-MM-DD."""
+    if not date_str:
+        return None
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(str(date_str), fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return str(date_str)
+
 
 def _safe_float(val):
     """Parse a string to float, returning None on failure."""
@@ -15,6 +29,20 @@ def _safe_float(val):
         return float(str(val).replace(",", ""))
     except (ValueError, TypeError):
         return None
+
+
+def _safe_int(val):
+    """Parse a string to int, returning None on failure."""
+    parsed = _safe_float(val)
+    return int(parsed) if parsed is not None else None
+
+
+def _get(record, key, default=None):
+    """Get a non-empty record value, normalizing common missing markers."""
+    value = record.get(key, default)
+    if value in (None, "", "N/A"):
+        return default
+    return value
 
 
 def parse_nass_record(record):
@@ -55,3 +83,65 @@ def parse_nass_record(record):
         "cv_pct": cv_pct,
         "load_time": record.get("load_time"),
     }
+
+
+def parse_retail_metrics(slug_id, sections):
+    """Parse AMS MARS retail feature metrics."""
+    rows = []
+    for section in sections:
+        if section.get("reportSection") != "Report Metrics":
+            continue
+        for record in section.get("results", []):
+            report_date = normalize_date(
+                record.get("report_Date")
+                or record.get("report_date")
+                or record.get("report_begin_date")
+            )
+            if not report_date:
+                continue
+            rows.append({
+                "report_date": report_date,
+                "slug_id": slug_id,
+                "region": _get(record, "region", ""),
+                "stores": _safe_int(record.get("stores")),
+                "last_week_stores": _safe_int(record.get("last_Week_Stores")),
+                "last_year_stores": _safe_int(record.get("last_Year_Stores")),
+                "feature_rate": _safe_float(record.get("feature")),
+                "last_week_feature": _safe_float(record.get("last_Week_Feature")),
+                "last_year_feature": _safe_float(record.get("last_Year_Feature")),
+                "activity_index": _safe_float(record.get("activity_Index")),
+                "last_week_activity": _safe_float(record.get("last_Week_Activity_Index")),
+                "last_year_activity": _safe_float(record.get("last_Year_Activity_Index")),
+            })
+    return rows
+
+
+def parse_retail_prices(slug_id, sections):
+    """Parse AMS MARS retail pork feature price details."""
+    rows = []
+    for section in sections:
+        if section.get("reportSection") != "Report Details":
+            continue
+        for record in section.get("results", []):
+            report_date = normalize_date(record.get("report_date") or record.get("report_begin_date"))
+            typ = _get(record, "type")
+            if not report_date or not typ:
+                continue
+            rows.append({
+                "report_date": report_date,
+                "slug_id": slug_id,
+                "region": _get(record, "region", ""),
+                "commodity": _get(record, "commodity"),
+                "section": _get(record, "section"),
+                "type": typ,
+                "condition": _get(record, "condition"),
+                "environment": _get(record, "environment", ""),
+                "package_size": _get(record, "package_size", ""),
+                "quality_grade": _get(record, "quality_grade"),
+                "price_avg": _safe_float(record.get("price_avg")),
+                "price_min": _safe_float(record.get("price_min")),
+                "price_max": _safe_float(record.get("price_max")),
+                "store_count": _safe_int(record.get("store_count")),
+                "price_unit": _get(record, "price_unit"),
+            })
+    return rows

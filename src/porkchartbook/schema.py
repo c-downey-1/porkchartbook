@@ -76,6 +76,77 @@ TABLES = {
             PRIMARY KEY (report_month, commodity, flow, product, country)
         )
     """,
+    "retail_metrics": """
+        CREATE TABLE IF NOT EXISTS retail_metrics (
+            report_date         TEXT NOT NULL,
+            slug_id             INTEGER NOT NULL,
+            region              TEXT NOT NULL DEFAULT '',
+            stores              INTEGER,
+            last_week_stores    INTEGER,
+            last_year_stores    INTEGER,
+            feature_rate        REAL,
+            last_week_feature   REAL,
+            last_year_feature   REAL,
+            activity_index      REAL,
+            last_week_activity  REAL,
+            last_year_activity  REAL,
+            fetched_at          TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (report_date, slug_id, region)
+        )
+    """,
+    "retail_prices": """
+        CREATE TABLE IF NOT EXISTS retail_prices (
+            report_date         TEXT NOT NULL,
+            slug_id             INTEGER NOT NULL,
+            region              TEXT NOT NULL DEFAULT '',
+            commodity           TEXT,
+            section             TEXT,
+            type                TEXT NOT NULL DEFAULT '',
+            condition           TEXT,
+            environment         TEXT,
+            package_size        TEXT,
+            quality_grade       TEXT,
+            price_avg           REAL,
+            price_min           REAL,
+            price_max           REAL,
+            store_count         INTEGER,
+            price_unit          TEXT,
+            fetched_at          TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (report_date, slug_id, region, section, type, condition, package_size)
+        )
+    """,
+    "fred_series": """
+        CREATE TABLE IF NOT EXISTS fred_series (
+            observation_date    TEXT NOT NULL,
+            series_id           TEXT NOT NULL,
+            value               REAL,
+            series_label        TEXT,
+            source_url          TEXT,
+            fetched_at          TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (observation_date, series_id)
+        )
+    """,
+    # Brazil pork exports — MDIC/SECEX Comex Stat, monthly, by NCM x destination.
+    # Used as global supply/competition context: Brazil is the world's #4 pork
+    # exporter. value_fob_usd is FOB USD, net_kg is net weight, stat_qty is the
+    # NCM's statistical quantity. Country names are the Portuguese labels the
+    # Comex Stat API returns; translate at the dashboard layer if needed.
+    "comexstat_pork_exports": """
+        CREATE TABLE IF NOT EXISTS comexstat_pork_exports (
+            report_month       TEXT NOT NULL,
+            flow               TEXT NOT NULL,
+            ncm_code           TEXT NOT NULL,
+            ncm_category       TEXT NOT NULL,
+            ncm_desc           TEXT,
+            country            TEXT NOT NULL,
+            value_fob_usd      REAL,
+            net_kg             REAL,
+            stat_qty           REAL,
+            source_url         TEXT,
+            fetched_at         TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (report_month, flow, ncm_code, country)
+        )
+    """,
 }
 
 INDEXES = [
@@ -85,6 +156,12 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_ams_hog_prices_series ON ams_hog_prices(series_name, report_date)",
     "CREATE INDEX IF NOT EXISTS idx_ers_trade_month ON ers_trade_totals(report_month)",
     "CREATE INDEX IF NOT EXISTS idx_ers_trade_partner_month ON ers_trade_partner_country(report_month)",
+    "CREATE INDEX IF NOT EXISTS idx_retail_metrics_date ON retail_metrics(report_date)",
+    "CREATE INDEX IF NOT EXISTS idx_retail_prices_date ON retail_prices(report_date)",
+    "CREATE INDEX IF NOT EXISTS idx_fred_series_id_date ON fred_series(series_id, observation_date)",
+    "CREATE INDEX IF NOT EXISTS idx_comex_pork_month ON comexstat_pork_exports(report_month)",
+    "CREATE INDEX IF NOT EXISTS idx_comex_pork_cat ON comexstat_pork_exports(ncm_category, report_month)",
+    "CREATE INDEX IF NOT EXISTS idx_comex_pork_country ON comexstat_pork_exports(country, report_month)",
     "CREATE INDEX IF NOT EXISTS idx_etl_log_source ON etl_log(source, slug_id, data_item)",
 ]
 

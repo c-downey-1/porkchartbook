@@ -6,6 +6,7 @@ Data sources:
   NASS QuickStats — Quarterly Hogs & Pigs report, weekly slaughter, prices
   AMS MPR Datamart — Barrow/gilt prices (LM_HG201), pork cutout (LM_PK602)
   ERS Trade        — Monthly pork import/export workbook
+  Comex Stat       — Brazil pork exports (MDIC/SECEX), monthly by NCM x country
 
 Usage:
   python -m porkchartbook.ingest --backfill-all
@@ -13,6 +14,7 @@ Usage:
   python -m porkchartbook.ingest --backfill-nass
   python -m porkchartbook.ingest --backfill-ams
   python -m porkchartbook.ingest --backfill-ers
+  python -m porkchartbook.ingest --backfill-comex
   python -m porkchartbook.ingest --status
   python -m porkchartbook.ingest --smoke-test
 """
@@ -26,7 +28,10 @@ from datetime import date, datetime, timedelta
 from . import db
 from . import parsers
 from .clients import ams_hog_client
+from .clients import comexstat_client
 from .clients import ers_trade_pork_client
+from .clients import fred_client
+from .clients import mars_client
 from .clients import nass_client
 
 
@@ -49,6 +54,31 @@ NASS_SERIES = [
         "short_desc": "HOGS, MARKET - INVENTORY",
         "label": "Market hog inventory",
     },
+    {
+        "short_desc": "HOGS, MARKET, LT 50 LBS - INVENTORY",
+        "label": "Market hog inventory under 50 lb",
+    },
+    {
+        "short_desc": "HOGS, MARKET, 50 TO 119 LBS - INVENTORY",
+        "label": "Market hog inventory 50-119 lb",
+    },
+    {
+        "short_desc": "HOGS, MARKET, 120 TO 179 LBS - INVENTORY",
+        "label": "Market hog inventory 120-179 lb",
+    },
+    {
+        "short_desc": "HOGS, MARKET, GE 180 LBS - INVENTORY",
+        "label": "Market hog inventory 180 lb and over",
+    },
+    # Farrowings and productivity
+    {
+        "short_desc": "HOGS, SOWS - FARROWED, MEASURED IN HEAD",
+        "label": "Sows farrowed",
+    },
+    {
+        "short_desc": "HOGS - LITTER RATE, MEASURED IN PIGS / LITTER",
+        "label": "Pigs per litter",
+    },
     # Pig crop
     {
         "short_desc": "HOGS - PIG CROP, MEASURED IN HEAD",
@@ -64,10 +94,95 @@ NASS_SERIES = [
         "short_desc": "HOGS - PRODUCTION, MEASURED IN LB",
         "label": "Pork production (lb)",
     },
+    # Monthly Livestock Slaughter — true commercial (~99% of industry) coverage.
+    # These are the canonical QuickStats short_desc strings (SLAUGHTER, COMMERCIAL
+    # word order); national agg level only.
+    {
+        "short_desc": "HOGS, SLAUGHTER, COMMERCIAL - SLAUGHTERED, MEASURED IN HEAD",
+        "label": "Commercial hog slaughter, monthly (head)",
+        "filters": {"agg_level_desc": "NATIONAL"},
+    },
+    {
+        "short_desc": "HOGS, SLAUGHTER, COMMERCIAL, FI - SLAUGHTERED, MEASURED IN HEAD",
+        "label": "Federally inspected hog slaughter, monthly (head)",
+        "filters": {"agg_level_desc": "NATIONAL"},
+    },
+    {
+        "short_desc": "HOGS, BARROWS & GILTS, SLAUGHTER, COMMERCIAL, FI - SLAUGHTERED, MEASURED IN HEAD",
+        "label": "Barrows & gilts slaughter, monthly (head)",
+        "filters": {"agg_level_desc": "NATIONAL"},
+    },
+    {
+        "short_desc": "HOGS, SOWS, SLAUGHTER, COMMERCIAL, FI - SLAUGHTERED, MEASURED IN HEAD",
+        "label": "Sow slaughter, monthly (head)",
+        "filters": {"agg_level_desc": "NATIONAL"},
+    },
+    {
+        "short_desc": "HOGS, BOARS, SLAUGHTER, COMMERCIAL, FI - SLAUGHTERED, MEASURED IN HEAD",
+        "label": "Boar slaughter, monthly (head)",
+        "filters": {"agg_level_desc": "NATIONAL"},
+    },
+    {
+        "short_desc": "HOGS, SLAUGHTER, COMMERCIAL - SLAUGHTERED, MEASURED IN LB / HEAD, LIVE BASIS",
+        "label": "Avg live slaughter weight, monthly (lb/head)",
+        "filters": {"agg_level_desc": "NATIONAL"},
+    },
+    {
+        "short_desc": "HOGS, BARROWS & GILTS, SLAUGHTER, COMMERCIAL, FI - SLAUGHTERED, MEASURED IN LB / HEAD, DRESSED BASIS",
+        "label": "Avg dressed weight, barrows & gilts, monthly (lb/head)",
+        "filters": {"agg_level_desc": "NATIONAL"},
+    },
+    {
+        "short_desc": "PORK, SLAUGHTER, COMMERCIAL - PRODUCTION, MEASURED IN LB",
+        "label": "Commercial pork production, monthly (lb)",
+        "filters": {"agg_level_desc": "NATIONAL"},
+    },
+    # Cold storage
+    {
+        "short_desc": "PORK, COLD STORAGE, FROZEN - STOCKS, MEASURED IN LB",
+        "label": "Frozen pork stocks",
+    },
+    {
+        "short_desc": "PORK, BELLIES, COLD STORAGE, FROZEN - STOCKS, MEASURED IN LB",
+        "label": "Frozen pork belly stocks",
+    },
+    {
+        "short_desc": "PORK, HAMS, COLD STORAGE, FROZEN - STOCKS, MEASURED IN LB",
+        "label": "Frozen pork ham stocks",
+    },
+    {
+        "short_desc": "PORK, LOINS, COLD STORAGE, FROZEN - STOCKS, MEASURED IN LB",
+        "label": "Frozen pork loin stocks",
+    },
     # Prices received
     {
         "short_desc": "HOGS - PRICE RECEIVED, MEASURED IN $ / CWT",
         "label": "Hog price received ($/cwt)",
+    },
+]
+
+RETAIL_PORK_SLUG_ID = 2868
+
+FRED_SERIES = [
+    {
+        "series_id": "PMAIZMTUSDM",
+        "label": "World maize price",
+    },
+    {
+        "series_id": "PSMEAUSDM",
+        "label": "World soybean meal price",
+    },
+    {
+        "series_id": "APU0000704111",
+        "label": "Average retail bacon price",
+    },
+    {
+        "series_id": "GASDESW",
+        "label": "US diesel price ($/gal)",
+    },
+    {
+        "series_id": "APU000072610",
+        "label": "US electricity price ($/kWh)",
     },
 ]
 
@@ -95,7 +210,8 @@ def ingest_nass_series(conn, series_config, year_ge=2010):
     """Fetch and store a single NASS data series."""
     short_desc = series_config["short_desc"]
     print(f"\n  {series_config['label']}")
-    records = nass_client.fetch_data_item(short_desc, year__GE=str(year_ge))
+    extra_filters = dict(series_config.get("filters", {}))
+    records = nass_client.fetch_data_item(short_desc, year__GE=str(year_ge), **extra_filters)
     if not records:
         return 0
     rows = [parsers.parse_nass_record(record) for record in records]
@@ -197,6 +313,94 @@ def ingest_ers_trade_partners(conn):
     return count
 
 
+def backfill_retail(conn, year_ge=2021):
+    """Fetch AMS retail pork feature metrics and advertised prices."""
+    print(f"\n{'=' * 60}")
+    print("  AMS Retail Pork Feature Activity")
+    print(f"{'=' * 60}")
+    start = date(year_ge, 1, 1)
+    end = date.today()
+    try:
+        sections = mars_client.fetch_report(RETAIL_PORK_SLUG_ID, start, end)
+    except Exception as exc:
+        print(f"  AMS retail pork fetch failed: {exc}")
+        return 0
+    metric_rows = parsers.parse_retail_metrics(RETAIL_PORK_SLUG_ID, sections)
+    price_rows = parsers.parse_retail_prices(RETAIL_PORK_SLUG_ID, sections)
+    metric_count = db.upsert_rows(conn, "retail_metrics", metric_rows)
+    price_count = db.upsert_rows(conn, "retail_prices", price_rows)
+    dates = [row["report_date"] for row in metric_rows + price_rows if row.get("report_date")]
+    if dates:
+        db.log_fetch(
+            conn,
+            "ams_retail",
+            min(dates),
+            max(dates),
+            metric_count + price_count,
+            slug_id=RETAIL_PORK_SLUG_ID,
+            data_item="weekly_retail_pork_feature_activity",
+        )
+    print(f"  AMS retail complete: {metric_count:,} metric rows, {price_count:,} price rows")
+    return metric_count + price_count
+
+
+def update_retail(conn):
+    """Incremental AMS retail update - current and prior year."""
+    return backfill_retail(conn, year_ge=date.today().year - 1)
+
+
+def backfill_fred(conn):
+    """Fetch public FRED series used as retail/feed-cost proxies."""
+    print(f"\n{'=' * 60}")
+    print("  FRED Public Series")
+    print(f"{'=' * 60}")
+    total = 0
+    for series in FRED_SERIES:
+        rows = fred_client.fetch_series(series["series_id"], label=series["label"])
+        if not rows:
+            continue
+        count = db.upsert_rows(conn, "fred_series", rows)
+        dates = [row["observation_date"] for row in rows if row.get("observation_date")]
+        if dates:
+            db.log_fetch(
+                conn,
+                "fred",
+                min(dates),
+                max(dates),
+                count,
+                data_item=series["series_id"],
+            )
+        total += count
+    print(f"  FRED complete: {total:,} observations")
+    return total
+
+
+def backfill_comexstat(conn, year_ge=2010, year_le=None):
+    """Fetch Brazil pork exports from MDIC/SECEX Comex Stat (monthly, by NCM x country)."""
+    year_le = year_le or date.today().year
+    print(f"\n{'=' * 60}")
+    print(f"  Comex Stat — Brazil Pork Exports (years {year_ge}-{year_le})")
+    print(f"{'=' * 60}")
+    try:
+        rows = comexstat_client.fetch_pork_exports(year_ge, year_le)
+    except Exception as exc:
+        print(f"  Comex Stat fetch failed: {exc}")
+        return 0
+    if not rows:
+        return 0
+    count = db.upsert_rows(conn, "comexstat_pork_exports", rows)
+    months = [r["report_month"] for r in rows if r.get("report_month")]
+    if months:
+        db.log_fetch(conn, "comexstat", min(months), max(months), count, data_item="pork_exports")
+    print(f"  Comex Stat complete: {count:,} rows")
+    return count
+
+
+def update_comexstat(conn):
+    """Incremental Comex Stat update — current and prior year (trade data revises)."""
+    return backfill_comexstat(conn, year_ge=date.today().year - 1)
+
+
 # ── Smoke tests ───────────────────────────────────────────────────────────
 
 def run_smoke_tests(conn):
@@ -213,6 +417,9 @@ def run_smoke_tests(conn):
         ("ams_hog_prices",          "SELECT COUNT(*) FROM ams_hog_prices"),
         ("ers_trade_totals",        "SELECT COUNT(*) FROM ers_trade_totals"),
         ("ers_trade_partner_country", "SELECT COUNT(*) FROM ers_trade_partner_country"),
+        ("retail_metrics",          "SELECT COUNT(*) FROM retail_metrics"),
+        ("fred_series",             "SELECT COUNT(*) FROM fred_series"),
+        ("comexstat_pork_exports",  "SELECT COUNT(*) FROM comexstat_pork_exports"),
     ]
 
     failed = []
@@ -260,6 +467,12 @@ def main():
                     help="Backfill AMS hog prices / cutout (all history)")
     ap.add_argument("--backfill-ers", action="store_true",
                     help="Backfill ERS pork trade workbook")
+    ap.add_argument("--backfill-retail", action="store_true",
+                    help="Backfill AMS retail pork feature activity")
+    ap.add_argument("--backfill-fred", action="store_true",
+                    help="Backfill FRED retail/feed proxy series")
+    ap.add_argument("--backfill-comex", action="store_true",
+                    help="Backfill Comex Stat Brazil pork exports")
 
     # Update flags (incremental)
     ap.add_argument("--update", action="store_true",
@@ -268,6 +481,10 @@ def main():
     # Options
     ap.add_argument("--nass-year-ge", type=int, default=2010,
                     help="Start year for NASS backfill (default: 2010)")
+    ap.add_argument("--retail-year-ge", type=int, default=2021,
+                    help="Start year for AMS retail feature backfill (default: 2021)")
+    ap.add_argument("--comex-year-ge", type=int, default=2010,
+                    help="Start year for Comex Stat Brazil pork export backfill (default: 2010)")
     ap.add_argument("--db", default=None,
                     help="Path to SQLite database file")
 
@@ -299,15 +516,28 @@ def main():
             ingest_ers_trade_totals(conn)
             ingest_ers_trade_partners(conn)
 
+        if args.backfill_all or args.backfill_retail:
+            backfill_retail(conn, year_ge=args.retail_year_ge)
+
+        if args.backfill_all or args.backfill_fred:
+            backfill_fred(conn)
+
+        if args.backfill_all or args.backfill_comex:
+            backfill_comexstat(conn, year_ge=args.comex_year_ge)
+
         if args.update:
             update_nass(conn)
             update_ams(conn)
             ingest_ers_trade_totals(conn)
             ingest_ers_trade_partners(conn)
+            update_retail(conn)
+            backfill_fred(conn)
+            update_comexstat(conn)
 
         all_actions = [
             args.backfill_all, args.backfill_nass, args.backfill_ams,
-            args.backfill_ers, args.update, args.status, args.smoke_test,
+            args.backfill_ers, args.backfill_retail, args.backfill_fred,
+            args.backfill_comex, args.update, args.status, args.smoke_test,
         ]
         if not any(all_actions):
             ap.print_help()

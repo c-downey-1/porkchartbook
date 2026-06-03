@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <title>US Pork Industry Executive Chartbook</title>
-<meta name="description" content="Free, interactive US pork industry data dashboard powered by USDA data. Herd inventory, slaughter, prices, and trade — updated monthly.">
+<meta name="description" content="Interactive US pork industry executive chartbook powered by USDA and public market data. Herd inventory, production, prices, retail demand, trade, costs, and risk.">
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/split-dashboard.css?v=20260328">
+<link rel="stylesheet" href="assets/split-dashboard.css?v=20260602o">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<!-- Microsoft Clarity — activate on launch
+<!-- Microsoft Clarity - activate on launch
 <script type="text/javascript">
   (function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
   t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
@@ -31,7 +32,7 @@
 
   <nav class="mobile-section-nav" id="mobileSectionNav" aria-label="Jump to section">
     <select class="mobile-section-select" id="mobileSectionSelect">
-      <option value="">Jump to section…</option>
+      <option value="">Jump to section...</option>
     </select>
   </nav>
 
@@ -46,134 +47,264 @@
     </a>
 
     <main class="dashboard-content">
-
-      <!-- ── I. Market Snapshot ─────────────────────────── -->
-      <section class="overview-band" id="overview">
-        <div class="section-head">
-          <div>
-            <div class="section-number">I</div>
-            <h2>Market Snapshot</h2>
-            <p>Key metrics from the latest available USDA data. Updated monthly.</p>
-          </div>
-        </div>
-        <div class="kpi-row">
-          <article class="kpi"><div class="label">Hog Inventory</div><div class="value" id="kpiInventory">—</div><div class="sub" id="kpiInventorySub"></div></article>
-          <article class="kpi"><div class="label">Weekly Slaughter</div><div class="value" id="kpiSlaughter">—</div><div class="sub" id="kpiSlaughterSub"></div></article>
-          <article class="kpi"><div class="label">Barrow/Gilt Price</div><div class="value" id="kpiPrice">—</div><div class="sub" id="kpiPriceSub"></div></article>
-          <article class="kpi"><div class="label">Pork Cutout</div><div class="value" id="kpiCutout">—</div><div class="sub" id="kpiCutoutSub"></div></article>
-          <article class="kpi"><div class="label">YTD Exports</div><div class="value" id="kpiExports">—</div><div class="sub" id="kpiExportsSub"></div></article>
-        </div>
-      </section>
-
-      <!-- ── II. Herd ───────────────────────────────────── -->
-      <section class="section" id="herd">
+      <section class="section" id="high-frequency">
         <div class="section-head"><div>
-          <div class="section-number">II</div>
-          <h2>Herd</h2>
-          <p>Quarterly Hogs &amp; Pigs report — inventory and pig crop. Source: USDA NASS.</p>
+          <div class="section-number">I</div>
+          <h2>High Frequency Data</h2>
+          <p>Daily directional data from the USDA AMS Mandatory Price Reporting (MPR). MPR plants historically account for ~92% of total processing.</p>
         </div></div>
         <div class="grid">
-          <article class="card wide" id="herdTotalWrap">
-            <h3>Total Hog Inventory</h3>
-            <div class="sub">Millions of head, quarterly — USDA NASS Hogs &amp; Pigs</div>
-            <canvas id="herdTotalChart"></canvas>
+          <article class="card wide" id="primalsWrap">
+            <h3>Primal Values</h3>
+            <div class="sub">$/cwt for loin, butt, picnic, rib, ham, and belly.</div>
+            <canvas id="primalsChart"></canvas>
           </article>
-          <article class="card" id="herdBreedingMarketWrap">
-            <h3>Breeding vs. Market Hogs</h3>
-            <div class="sub">Thousands of head, quarterly</div>
-            <canvas id="herdBreedingMarketChart"></canvas>
-          </article>
-          <article class="card" id="herdPigCropWrap">
-            <h3>Pig Crop</h3>
-            <div class="sub">Millions of head per quarter — USDA NASS</div>
-            <canvas id="herdPigCropChart"></canvas>
-          </article>
-        </div>
-      </section>
-
-      <!-- ── III. Slaughter & Production ───────────────── -->
-      <section class="section" id="slaughter-production">
-        <div class="section-head"><div>
-          <div class="section-number">III</div>
-          <h2>Slaughter &amp; Production</h2>
-          <p>Federally inspected slaughter and pork production. Source: USDA NASS, USDA AMS.</p>
-        </div></div>
-        <div class="grid">
           <article class="card wide" id="slaughterHeadWrap">
-            <h3>Hog Slaughter</h3>
-            <div class="sub">Head — USDA NASS</div>
+            <h3>Daily Hogs Processed</h3>
+            <div class="sub">Daily hogs processed, thousand head (AMS LM_HG201, covered packers).</div>
             <canvas id="slaughterHeadChart"></canvas>
           </article>
           <article class="card" id="porkProductionWrap">
-            <h3>Pork Production</h3>
-            <div class="sub">Million lbs per month — USDA NASS</div>
+            <h3>Estimated Daily Pork Production</h3>
+            <div class="sub">Daily estimated pork production, million lb (daily hogs × carcass weight).</div>
             <canvas id="porkProductionChart"></canvas>
           </article>
           <article class="card" id="carcassWeightWrap">
             <h3>Average Carcass Weight</h3>
-            <div class="sub">Pounds — USDA AMS LM_HG201</div>
+            <div class="sub">Average carcass weight, pounds (AMS LM_HG201).</div>
             <canvas id="carcassWeightChart"></canvas>
           </article>
-        </div>
-      </section>
-
-      <!-- ── IV. Prices ─────────────────────────────────── -->
-      <section class="section" id="prices">
-        <div class="section-head"><div>
-          <div class="section-number">IV</div>
-          <h2>Prices</h2>
-          <p>Live hog prices and pork cutout values. Source: USDA AMS, USDA NASS.</p>
-        </div></div>
-        <div class="grid">
           <article class="card wide" id="hogPriceWrap">
-            <h3>Barrow &amp; Gilt Live Hog Price</h3>
-            <div class="sub">$/cwt — Weighted average base price, USDA AMS LM_HG201 (National Direct)</div>
+            <h3>Barrow &amp; Gilt Prices</h3>
+            <div class="sub">$/cwt, weighted average base and net prices.</div>
             <canvas id="hogPriceChart"></canvas>
           </article>
           <article class="card" id="cutoutWrap">
             <h3>Pork Cutout Value</h3>
-            <div class="sub">$/cwt — USDA AMS LM_PK602</div>
+            <div class="sub">$/cwt, daily composite cutout.</div>
             <canvas id="cutoutChart"></canvas>
           </article>
-          <article class="card" id="primalsWrap">
-            <h3>Primal Values</h3>
-            <div class="sub">$/cwt — Loin, Ham, Belly, Butt, Rib, Picnic</div>
-            <canvas id="primalsChart"></canvas>
+          <article class="card" id="hogCutoutSpreadWrap">
+            <h3>Cutout Less Net Hog Price</h3>
+            <div class="sub">$/cwt spread proxy.</div>
+            <canvas id="hogCutoutSpreadChart"></canvas>
           </article>
         </div>
       </section>
 
-      <!-- ── V. Trade ───────────────────────────────────── -->
-      <section class="section" id="trade">
+      <section class="section" id="herd-supply">
+        <div class="section-head"><div>
+          <div class="section-number">II</div>
+          <h2>Herd &amp; Forward Supply</h2>
+          <p>Quarterly Hogs &amp; Pigs indicators for inventory, market-weight mix, farrowings, productivity, and pig crop.</p>
+        </div></div>
+        <div class="grid">
+          <article class="card wide" id="marketWeightWrap">
+            <h3>Hog Inventory by Weight Class</h3>
+            <div class="sub">Million head, quarterly. Stacked by market weight class — use the checkbox to include breeding stock.</div>
+            <canvas id="marketWeightChart"></canvas>
+          </article>
+          <article class="card" id="herdPigCropWrap">
+            <h3>Pig Crop</h3>
+            <div class="sub">Million head, monthly where available.</div>
+            <canvas id="herdPigCropChart"></canvas>
+          </article>
+          <article class="card" id="herdBreedingMarketWrap">
+            <h3>Breeding Stock Inventory</h3>
+            <div class="sub">Million head, quarterly.</div>
+            <canvas id="herdBreedingMarketChart"></canvas>
+          </article>
+          <article class="card" id="sowSlaughterWrap">
+            <h3>Sow &amp; Boar Slaughter</h3>
+            <div class="sub">Thousand head per month (federally inspected) — breeding-herd cull signal.</div>
+            <canvas id="sowSlaughterChart"></canvas>
+          </article>
+          <article class="card" id="pigsPerLitterWrap">
+            <h3>Pigs Per Litter</h3>
+            <div class="sub">Pigs per litter.</div>
+            <canvas id="pigsPerLitterChart"></canvas>
+          </article>
+          <article class="card" id="sowsFarrowedWrap">
+            <h3>Sows Farrowed</h3>
+            <div class="sub">Million head.</div>
+            <canvas id="sowsFarrowedChart"></canvas>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="slaughter-production">
+        <div class="section-head"><div>
+          <div class="section-number">III</div>
+          <h2>Slaughter &amp; Production</h2>
+          <p>Monthly USDA NASS commercial slaughter, pork production, average live and dressed weights, and frozen cold-storage stocks (~99% industry coverage).</p>
+        </div></div>
+        <div class="grid">
+          <article class="card wide" id="commercialSlaughterWrap">
+            <h3>Commercial Hog Slaughter</h3>
+            <div class="sub">Million head per month, stacked — federally inspected plus the non-FI remainder totals commercial slaughter.</div>
+            <canvas id="commercialSlaughterChart"></canvas>
+          </article>
+          <article class="card" id="commercialProductionWrap">
+            <h3>Commercial Pork Production</h3>
+            <div class="sub">Million lb per month, carcass weight, all commercial plants.</div>
+            <canvas id="commercialProductionChart"></canvas>
+          </article>
+          <article class="card wide" id="productionSeasonalWrap">
+            <h3>Monthly Production Comparison</h3>
+            <div class="sub">Million lb, commercial pork production by month — a line per year (last 10), with 2026 (yellow) and 2025 (orange) highlighted against prior years.</div>
+            <canvas id="productionSeasonalChart"></canvas>
+          </article>
+          <article class="card" id="avgWeightWrap">
+            <h3>Average Slaughter Weight</h3>
+            <div class="sub">Pounds per head — dressed (carcass) weight stacked inside average live weight.</div>
+            <canvas id="avgWeightChart"></canvas>
+          </article>
+          <article class="card" id="coldStorageWrap">
+            <h3>Cold Storage</h3>
+            <div class="sub">Million lb, frozen pork stocks and major cuts.</div>
+            <canvas id="coldStorageChart"></canvas>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="retail-demand">
+        <div class="section-head"><div>
+          <div class="section-number">IV</div>
+          <h2>Retail &amp; Domestic Demand</h2>
+          <p>Retail feature activity, advertised pork prices, and consumer price proxies.</p>
+        </div></div>
+        <div class="grid">
+          <article class="card wide" id="retailFeatureWrap">
+            <h3>Retail Feature Activity</h3>
+            <div class="sub">Feature rate and activity index from AMS retail pork reports.</div>
+            <canvas id="retailFeatureChart"></canvas>
+          </article>
+          <article class="card" id="retailPriceWrap">
+            <h3>Featured Retail Pork Price</h3>
+            <div class="sub">$/lb, weighted featured price with FRED bacon proxy where available.</div>
+            <canvas id="retailPriceChart"></canvas>
+          </article>
+          <article class="card" id="topRetailItemsWrap">
+            <h3>Latest Featured Items</h3>
+            <div class="sub">Highest-store-count advertised pork items in the latest AMS retail report.</div>
+            <div class="data-list" id="topRetailItemsPanel"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="inventories-trade">
         <div class="section-head"><div>
           <div class="section-number">V</div>
           <h2>Trade</h2>
-          <p>Monthly pork import and export volumes. Source: USDA ERS Livestock &amp; Meat International Trade Data. Data typically lags ~6 weeks.</p>
+          <p>Monthly pork trade flows, destination mix, monthly export comparison, and exports as a share of production.</p>
         </div></div>
         <div class="grid">
           <article class="card wide" id="tradeFlowWrap">
-            <h3>Pork Exports vs. Imports</h3>
-            <div class="sub">Million lbs per month, pork only (excludes variety meat and live swine)</div>
+            <h3>Pork Exports: US vs. Brazil</h3>
+            <div class="sub">Million lb per month. US exports are ERS carcass weight; Brazil exports (Comex Stat) are product weight, so treat the comparison as directional.</div>
             <canvas id="tradeFlowChart"></canvas>
           </article>
           <article class="card" id="exportDestinationsWrap">
             <h3>Top Export Destinations</h3>
-            <div class="sub">1,000 lbs per month — USDA ERS</div>
+            <div class="sub">Million lb per month, stacked by destination with an Other category totaling all pork exports.</div>
             <canvas id="exportDestinationsChart"></canvas>
           </article>
           <article class="card" id="importSourcesWrap">
             <h3>Top Import Sources</h3>
-            <div class="sub">1,000 lbs per month — USDA ERS</div>
+            <div class="sub">Million lb per month, stacked by source with an Other category totaling all US pork imports.</div>
             <canvas id="importSourcesChart"></canvas>
+          </article>
+          <article class="card wide" id="exportComparisonWrap">
+            <h3>Monthly Export Comparison</h3>
+            <div class="sub">Million lb, US pork exports by calendar month with each year side by side — year-over-year and seasonal comparison.</div>
+            <canvas id="exportComparisonChart"></canvas>
+          </article>
+          <article class="card" id="exportShareWrap">
+            <h3>Exports as Share of Production</h3>
+            <div class="sub">US pork exports divided by NASS commercial pork production (carcass weight), 12-month rolling average.</div>
+            <canvas id="exportShareChart"></canvas>
+          </article>
+          <article class="card" id="brazilDestinationsWrap">
+            <h3>Brazil Top Export Destinations</h3>
+            <div class="sub">Million lb per month, stacked by destination with an Other category totaling all Brazil fresh/frozen pork exports.</div>
+            <canvas id="brazilDestinationsChart"></canvas>
           </article>
         </div>
       </section>
 
-      <div class="footer" id="dashFooter">Pork dashboard updated —. Sources: USDA NASS · USDA AMS · USDA ERS.</div>
+      <section class="section" id="costs-risk">
+        <div class="section-head"><div>
+          <div class="section-number">VI</div>
+          <h2>Costs, Forecasts &amp; Risk</h2>
+          <p>Feed-cost proxy, cutout-net spread, and risk watch items for monthly executive review.</p>
+        </div></div>
+        <div class="grid">
+          <article class="card wide" id="inputCostWrap">
+            <h3>Input Cost Price Changes</h3>
+            <div class="sub">% change in price of common pork input costs from a chosen index date.</div>
+            <canvas id="inputCostChart"></canvas>
+          </article>
+          <article class="card" id="feedCostWrap">
+            <h3>Feed-Cost Proxy Index</h3>
+            <div class="sub">Corn and soybean meal proxy index from public FRED series.</div>
+            <canvas id="feedCostChart"></canvas>
+          </article>
+          <article class="card" id="monthlyMarginWrap">
+            <h3>Monthly Cutout-Net Spread</h3>
+            <div class="sub">$/cwt, monthly average cutout less net hog price.</div>
+            <canvas id="monthlyMarginChart"></canvas>
+          </article>
+          <article class="card wide" id="riskWatchWrap">
+            <h3>Risk Watch</h3>
+            <div class="sub">Public-source issues that should stay on the monthly page.</div>
+            <div class="risk-grid" id="riskWatchPanel"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="monthly-updates">
+        <div class="section-head"><div>
+          <div class="section-number">VII</div>
+          <h2>Monthly Updates</h2>
+          <p>Signup block prepared for the same executive-distribution workflow as the egg chartbook.</p>
+        </div></div>
+        <div class="grid">
+          <article class="card wide">
+            <h3>Get the Pork Chartbook</h3>
+            <div class="sub">Monthly public-data refresh for pork industry executives.</div>
+            <form class="dashboard-signup-form" id="dashboardSignupForm">
+              <div class="dashboard-signup-row">
+                <label class="dashboard-signup-field">
+                  <span>Name</span>
+                  <input type="text" name="name" autocomplete="name">
+                </label>
+                <label class="dashboard-signup-field">
+                  <span>Email</span>
+                  <input type="email" name="email" autocomplete="email" required>
+                </label>
+              </div>
+              <div class="dashboard-signup-row">
+                <label class="dashboard-signup-field">
+                  <span>Company</span>
+                  <input type="text" name="company" autocomplete="organization">
+                </label>
+                <label class="dashboard-signup-field">
+                  <span>Role</span>
+                  <input type="text" name="role">
+                </label>
+              </div>
+              <button class="dashboard-signup-button" type="submit">Request monthly updates</button>
+              <div class="dashboard-signup-status" id="dashboardSignupStatus" aria-live="polite"></div>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <div class="footer" id="dashFooter">Pork chartbook updated --. Sources: USDA NASS · USDA AMS · USDA ERS · FRED.</div>
     </main>
   </div>
 </div>
-<script src="assets/dashboard-common.js?v=20260328"></script>
-<script src="assets/pork-dashboard.js?v=20260328"></script>
+<script src="assets/dashboard-common.js?v=20260602o"></script>
+<script src="assets/pork-dashboard.js?v=20260602o"></script>
 </body>
 </html>

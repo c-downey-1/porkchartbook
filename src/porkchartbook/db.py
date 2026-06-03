@@ -97,6 +97,10 @@ def get_status(conn):
         ("ams_hog_prices", "series_name", "report_date", None),
         ("ers_trade_totals", "section_label", "report_month", "commodity = 'pork'"),
         ("ers_trade_partner_country", "flow", "report_month", "commodity = 'pork'"),
+        ("retail_metrics", "region", "report_date", None),
+        ("retail_prices", "section", "report_date", None),
+        ("fred_series", "series_id", "observation_date", None),
+        ("comexstat_pork_exports", "ncm_category", "report_month", "flow = 'export'"),
     ]
 
     for table, group_col, date_expr, where_clause in table_specs:

@@ -3,6 +3,8 @@ const chartRanges = {};
 const chartRenderers = {};
 
 const RANGE_LABELS = {
+  '7d': '7D',
+  '1m': '1M',
   '30d': '30D',
   '60d': '60D',
   '3m': '3M',
@@ -619,6 +621,13 @@ function baseOptions(yLabel, extra = {}) {
   if (extra.stacked) {
     options.scales.x.stacked = true;
     options.scales.y.stacked = true;
+  }
+  if (extra.categoryX) {
+    // Plain category x-axis (e.g. quarter labels) instead of the date-tick planner.
+    delete options.scales.x.afterBuildTicks;
+    options.scales.x.ticks.autoSkip = true;
+    options.scales.x.ticks.maxTicksLimit = isMobileWidth() ? 5 : (extra.maxTicks || 10);
+    options.scales.x.ticks.callback = function (value) { return this.getLabelForValue(value); };
   }
   if (extra.yMin != null) options.scales.y.min = extra.yMin;
   if (extra.yMax != null) options.scales.y.max = extra.yMax;
