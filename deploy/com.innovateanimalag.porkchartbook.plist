@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.innovateanimalag.porkchartbook</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/casey/Documents/Workspace/IAA_Code_Projects/porkchartbook/update_pork_chartbook.sh</string>
+    </array>
+
+    <!-- 2:00 PM Pacific daily. Well after the AMS prior-day swine reports
+         (LM_HG201 / LM_PK602, the daily driver) are posted. launchd runs a
+         missed interval once on next wake. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>14</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>TZ</key>
+        <string>America/Los_Angeles</string>
+        <key>PATH</key>
+        <string>/Library/Frameworks/Python.framework/Versions/3.13/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>/Users/casey</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/casey/pork_chartbook_launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/casey/pork_chartbook_launchd.log</string>
+</dict>
+</plist>

@@ -4,6 +4,7 @@ nass_client.py — NASS QuickStats API client.
 
 import json
 import os
+import socket
 import time
 from datetime import date
 from urllib.error import HTTPError, URLError
@@ -20,7 +21,8 @@ _REQUEST_DELAY = 1.0
 def nass_get(endpoint, params, retries=3):
     """HTTP GET against NASS QuickStats API. Returns parsed JSON.
 
-    Retries on 403/429 with exponential backoff.
+    Retries on 403/429 with exponential backoff, and on read/connection
+    timeouts (NASS QuickStats intermittently stalls on larger queries).
     """
     params["key"] = NASS_KEY
     params["format"] = "JSON"
@@ -37,6 +39,14 @@ def nass_get(endpoint, params, retries=3):
             if e.code in (403, 429) and attempt < retries - 1:
                 wait = (attempt + 1) * 5
                 print(f"  (rate limited, waiting {wait}s) ", end="", flush=True)
+                time.sleep(wait)
+                continue
+            raise
+        except (URLError, TimeoutError, socket.timeout) as e:
+            # Read/connection timeouts are common on QuickStats; back off and retry.
+            if attempt < retries - 1:
+                wait = (attempt + 1) * 5
+                print(f"  (timeout: {e}, retrying in {wait}s) ", end="", flush=True)
                 time.sleep(wait)
                 continue
             raise

@@ -79,6 +79,60 @@ def get_last_fetched(conn, source, slug_id=None, data_item=None):
     return row[0] if row and row[0] else None
 
 
+def get_source_state(conn, source_key):
+    """Return the last stored probe fingerprint for a source key, or None."""
+    row = conn.execute(
+        "SELECT probe_value FROM source_state WHERE source_key=?",
+        (source_key,),
+    ).fetchone()
+    return row[0] if row and row[0] is not None else None
+
+
+def set_source_state(conn, source_key, probe_value, changed=False):
+    """Upsert a source's probe fingerprint.
+
+    Always bumps last_checked_at. Bumps last_changed_at only when changed=True.
+    """
+    if changed:
+        conn.execute(
+            """INSERT INTO source_state (source_key, probe_value, last_checked_at, last_changed_at)
+               VALUES (?, ?, datetime('now'), datetime('now'))
+               ON CONFLICT(source_key) DO UPDATE SET
+                   probe_value     = excluded.probe_value,
+                   last_checked_at = excluded.last_checked_at,
+                   last_changed_at = excluded.last_changed_at""",
+            (source_key, str(probe_value) if probe_value is not None else None),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO source_state (source_key, probe_value, last_checked_at)
+               VALUES (?, ?, datetime('now'))
+               ON CONFLICT(source_key) DO UPDATE SET
+                   probe_value     = excluded.probe_value,
+                   last_checked_at = excluded.last_checked_at""",
+            (source_key, str(probe_value) if probe_value is not None else None),
+        )
+    conn.commit()
+
+
+def table_fingerprint(conn, table, date_col, where=None):
+    """Return (row_count, max_date) for a table, for before/after change detection.
+
+    Returns (0, None) if the table does not exist yet. ``where`` is an optional
+    SQL predicate (without the WHERE keyword).
+    """
+    where_sql = f" WHERE {where}" if where else ""
+    try:
+        row = conn.execute(
+            f"SELECT COUNT(*), MAX({date_col}) FROM {table}{where_sql}"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return (0, None)
+    if not row:
+        return (0, None)
+    return (row[0] or 0, row[1])
+
+
 def export_csv(conn, query, output_path):
     cur = conn.execute(query)
     cols = [desc[0] for desc in cur.description]

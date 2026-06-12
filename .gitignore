@@ -7,3 +7,6 @@ dist/
 build/
 .env
 *.log
+.orchestrate.lock
+*.db-shm
+*.db-wal

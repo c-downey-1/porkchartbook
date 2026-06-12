@@ -16,6 +16,18 @@ TABLES = {
             status        TEXT DEFAULT 'ok'
         )
     """,
+    # source_state — one row per orchestrated source key, holding the most
+    # recent freshness-probe fingerprint (NASS record count, ERS workbook
+    # Last-Modified/ETag, etc.) so the daily run can decide whether a
+    # long-term source actually published something new before re-ingesting.
+    "source_state": """
+        CREATE TABLE IF NOT EXISTS source_state (
+            source_key       TEXT PRIMARY KEY,
+            probe_value      TEXT,
+            last_checked_at  TEXT DEFAULT (datetime('now')),
+            last_changed_at  TEXT
+        )
+    """,
     "nass_data": """
         CREATE TABLE IF NOT EXISTS nass_data (
             year               INTEGER NOT NULL,

@@ -313,6 +313,11 @@ def ingest_ers_trade_partners(conn):
     return count
 
 
+def update_ers(conn):
+    """Run both ERS pork trade ingests (totals + partner countries)."""
+    return ingest_ers_trade_totals(conn) + ingest_ers_trade_partners(conn)
+
+
 def backfill_retail(conn, year_ge=2021):
     """Fetch AMS retail pork feature metrics and advertised prices."""
     print(f"\n{'=' * 60}")
