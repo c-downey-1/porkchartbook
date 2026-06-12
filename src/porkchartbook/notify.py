@@ -28,8 +28,12 @@ import smtplib
 import sys
 from email.mime.text import MIMEText
 
-FROM_ADDR = "casey.m.downey@gmail.com"
-TO_ADDRS = ["casey@innovateanimalag.org", "gabriela@innovateanimalag.org"]
+# Sender and recipients come from the environment (set in ~/.zshrc alongside
+# the API keys) so personal/work addresses stay out of the public repo.
+#   PORK_EMAIL_FROM = sender gmail address
+#   PORK_EMAIL_TO   = comma-separated recipient list
+FROM_ADDR = os.environ.get("PORK_EMAIL_FROM", "")
+TO_ADDRS = [a.strip() for a in os.environ.get("PORK_EMAIL_TO", "").split(",") if a.strip()]
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -173,6 +177,9 @@ def send_email(subject, body, to_addrs=None, dry_run=False):
     password = os.environ.get("GMAIL_APP_PASSWORD", "")
     if not password:
         print("WARNING: GMAIL_APP_PASSWORD not set, skipping email", file=sys.stderr)
+        return False
+    if not FROM_ADDR or not to_addrs:
+        print("WARNING: PORK_EMAIL_FROM / PORK_EMAIL_TO not set, skipping email", file=sys.stderr)
         return False
 
     msg = MIMEText(body)

@@ -10,3 +10,5 @@ build/
 .orchestrate.lock
 *.db-shm
 *.db-wal
+# Rendered launchd plist holds machine-specific absolute paths — keep it local.
+deploy/*.plist

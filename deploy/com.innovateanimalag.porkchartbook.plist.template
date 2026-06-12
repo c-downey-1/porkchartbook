@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Template — render placeholders, then install. See deploy/README.md.
+     The rendered .plist is gitignored so machine-specific paths stay out of
+     the public repo. -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -8,7 +11,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/casey/Documents/Workspace/IAA_Code_Projects/porkchartbook/update_pork_chartbook.sh</string>
+        <string>__PROJECT_DIR__/update_pork_chartbook.sh</string>
     </array>
 
     <!-- 2:00 PM Pacific daily. Well after the AMS prior-day swine reports
@@ -29,12 +32,12 @@
         <key>PATH</key>
         <string>/Library/Frameworks/Python.framework/Versions/3.13/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
         <key>HOME</key>
-        <string>/Users/casey</string>
+        <string>__HOME__</string>
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/casey/pork_chartbook_launchd.log</string>
+    <string>__HOME__/pork_chartbook_launchd.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/casey/pork_chartbook_launchd.log</string>
+    <string>__HOME__/pork_chartbook_launchd.log</string>
 </dict>
 </plist>

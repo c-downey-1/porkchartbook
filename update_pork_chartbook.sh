@@ -10,7 +10,9 @@
 
 set -uo pipefail
 
-PROJECT_DIR="/Users/casey/Documents/Workspace/IAA_Code_Projects/porkchartbook"
+# Resolve the project dir from this script's own location so nothing
+# machine-specific has to be hardcoded (keeps it out of the public repo).
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG="$HOME/pork_chartbook.log"
 
 # Pull exported env vars (NASS_API_KEY, MARS_API_KEY, GMAIL_APP_PASSWORD) from
