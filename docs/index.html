@@ -54,20 +54,15 @@
           <p>Daily directional data from the USDA AMS Mandatory Price Reporting (MPR). MPR plants historically account for ~92% of total processing.</p>
         </div></div>
         <div class="grid">
-          <article class="card wide" id="primalsWrap">
-            <h3>Primal Values</h3>
-            <div class="sub">$/cwt for loin, butt, picnic, rib, ham, and belly.</div>
-            <canvas id="primalsChart"></canvas>
+          <article class="card" id="porkProductionWrap">
+            <h3>Estimated Daily Pork Production</h3>
+            <div class="sub">Daily estimated pork production, million lb (daily hogs × carcass weight).</div>
+            <canvas id="porkProductionChart"></canvas>
           </article>
           <article class="card wide" id="slaughterHeadWrap">
             <h3>Daily Hogs Processed</h3>
             <div class="sub">Daily hogs processed, thousand head (AMS LM_HG201, covered packers).</div>
             <canvas id="slaughterHeadChart"></canvas>
-          </article>
-          <article class="card" id="porkProductionWrap">
-            <h3>Estimated Daily Pork Production</h3>
-            <div class="sub">Daily estimated pork production, million lb (daily hogs × carcass weight).</div>
-            <canvas id="porkProductionChart"></canvas>
           </article>
           <article class="card" id="carcassWeightWrap">
             <h3>Average Carcass Weight</h3>
@@ -78,6 +73,11 @@
             <h3>Barrow &amp; Gilt Prices</h3>
             <div class="sub">$/cwt, weighted average base and net prices.</div>
             <canvas id="hogPriceChart"></canvas>
+          </article>
+          <article class="card wide" id="primalsWrap">
+            <h3>Primal Values</h3>
+            <div class="sub">$/cwt for loin, butt, picnic, rib, ham, and belly.</div>
+            <canvas id="primalsChart"></canvas>
           </article>
           <article class="card" id="cutoutWrap">
             <h3>Pork Cutout Value</h3>
