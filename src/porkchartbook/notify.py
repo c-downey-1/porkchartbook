@@ -29,7 +29,7 @@ import sys
 from email.mime.text import MIMEText
 
 FROM_ADDR = "casey.m.downey@gmail.com"
-TO_ADDRS = ["casey@innovateanimalag.org"]
+TO_ADDRS = ["casey@innovateanimalag.org", "gabriela@innovateanimalag.org"]
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -71,16 +71,26 @@ def build_summary(report):
     long_term = [s for s in report["sources"] if s["tier"] == "long-term"]
 
     # ── Subject ──
+    # Every subject carries an explicit monthly/long-term flag so you can tell
+    # at a glance whether any non-daily ("monthly") data moved, plus a bell when
+    # it did.
     prefix = "[DRY RUN] " if report.get("dry_run") else ""
-    if errors:
-        subject = f"{prefix}⚠️ Pork chartbook update had errors — {date_str}"
-    elif flagged:
+    if flagged:
         names = ", ".join(s["label_short"] for s in flagged)
-        subject = f"{prefix}\U0001f514 Pork chartbook: {names} updated — {date_str}"
-    elif report.get("data_changed"):
-        subject = f"{prefix}Pork chartbook updated — {date_str}"
+        monthly_tag = f"Monthly: {names} updated"
+        bell = "\U0001f514 "
     else:
-        subject = f"{prefix}Pork chartbook — no changes — {date_str}"
+        monthly_tag = "Monthly: no updates"
+        bell = ""
+
+    if errors:
+        base = f"⚠️ Pork chartbook update had errors — {date_str}"
+    elif report.get("data_changed"):
+        base = f"Pork chartbook updated — {date_str}"
+    else:
+        base = f"Pork chartbook — no changes — {date_str}"
+
+    subject = f"{prefix}{bell}{base} [{monthly_tag}]"
 
     # ── Body ──
     lines = []
