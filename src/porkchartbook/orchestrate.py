@@ -212,14 +212,22 @@ def _git(args, check=False):
 
 
 def _commit_and_push(date_str, no_push=False):
-    """Stage docs/data.json, commit, optionally push. Returns (committed, commit_hash, diff_stat, error)."""
-    _git(["add", DATA_JSON_REL])
-    diff = _git(["diff", "--cached", "--stat", "--", DATA_JSON_REL])
-    diff_stat = diff.stdout.strip()
-    if not diff_stat:
-        return (False, None, "", None)  # nothing actually staged
+    """Commit docs/data.json ONLY, optionally push.
 
-    commit = _git(["commit", "-m", f"Update pork chartbook data — {date_str}"])
+    Deliberately path-scoped: the job never touches, reverts, or commits any
+    other file. It compares the working tree to HEAD for docs/data.json (so the
+    check is independent of whatever else you have staged), and commits with an
+    explicit pathspec — any other files you have modified or staged locally are
+    left exactly as they are. Returns (committed, commit_hash, diff_stat, error).
+    """
+    # Has docs/data.json actually changed vs the last commit? (index-independent)
+    if _git(["diff", "--quiet", "HEAD", "--", DATA_JSON_REL]).returncode == 0:
+        return (False, None, "", None)  # no change to data.json
+    diff_stat = _git(["diff", "--stat", "HEAD", "--", DATA_JSON_REL]).stdout.strip()
+
+    # Pathspec-scoped commit: commits the working-tree docs/data.json and nothing
+    # else, regardless of what is staged in the index.
+    commit = _git(["commit", "-m", f"Update pork chartbook data — {date_str}", "--", DATA_JSON_REL])
     if commit.returncode != 0:
         return (False, None, diff_stat, commit.stderr.strip() or commit.stdout.strip())
 
