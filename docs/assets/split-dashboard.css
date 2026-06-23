@@ -637,8 +637,31 @@ a{color:inherit}
 }
 
 .card.wide{grid-column:span 12}
+.card.half{grid-column:span 6}
 .card.narrow{grid-column:span 4}
 .card.is-hidden{display:none}
+
+.card.placeholder{
+  opacity:.7;
+  border:1px dashed rgba(1,48,70,.28);
+  border-radius:10px;
+  padding:16px;
+  min-height:84px;
+}
+.card.placeholder h3{color:var(--muted)}
+.planned-tag{
+  display:inline-block;
+  margin-left:8px;
+  padding:2px 9px;
+  font-size:.68rem;
+  font-weight:600;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color:var(--muted);
+  background:rgba(1,48,70,.07);
+  border-radius:999px;
+  vertical-align:middle;
+}
 
 .card h3{
   margin:0;
@@ -1002,7 +1025,7 @@ a{color:inherit}
   }
 
   .hero{grid-template-columns:1fr}
-  .card,.card.narrow,.card.wide{grid-column:span 12}
+  .card,.card.narrow,.card.wide,.card.half{grid-column:span 12}
   .chooser-card{grid-template-columns:1fr}
   .chooser-link{align-self:start}
   .risk-grid{grid-template-columns:1fr}

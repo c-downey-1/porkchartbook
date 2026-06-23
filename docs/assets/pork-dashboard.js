@@ -239,7 +239,6 @@ function setPorkChartSources() {
   const ers = '<a href="https://www.ers.usda.gov/data-products/livestock-and-meat-international-trade-data/" target="_blank" rel="noreferrer">USDA ERS Trade</a>';
   const fred = '<a href="https://fred.stlouisfed.org/" target="_blank" rel="noreferrer">FRED</a>';
   const comex = '<a href="https://comexstat.mdic.gov.br/" target="_blank" rel="noreferrer">Brazil MDIC/SECEX Comex Stat</a>';
-  const aphis = '<a href="https://www.aphis.usda.gov/livestock-poultry-disease/swine/african-swine-fever" target="_blank" rel="noreferrer">USDA APHIS</a>';
 
   const srcMap = {
     herdBreedingMarketChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
@@ -268,10 +267,8 @@ function setPorkChartSources() {
     exportComparisonChart: `Chart: Innovate Animal Ag • Source: ${ers}`,
     exportShareChart: `Chart: Innovate Animal Ag • Source: ${ers} / ${nass}`,
     brazilDestinationsChart: `Chart: Innovate Animal Ag • Source: ${comex}`,
-    feedCostChart: `Chart: Innovate Animal Ag • Source: ${fred}`,
     inputCostChart: `Chart: Innovate Animal Ag • Sources: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a> · <a href="https://fred.stlouisfed.org/series/GASDESW" target="_blank" rel="noreferrer">FRED GASDESW</a> · <a href="https://fred.stlouisfed.org/series/APU000072610" target="_blank" rel="noreferrer">FRED APU000072610</a>`,
     monthlyMarginChart: `Chart: Innovate Animal Ag • Source: ${amsHg} / ${amsPk}`,
-    riskWatchPanel: `Sources: ${aphis} • ${ers} • ${amsRetail}`,
   };
   Object.entries(srcMap).forEach(([id, html]) => appendCardSource(id, html));
 }
@@ -958,20 +955,6 @@ function buildRetailDemand(retail) {
   } else {
     hideEmptyCard('retailPriceChart');
   }
-
-  const panel = document.getElementById('topRetailItemsPanel');
-  const items = retail.top_featured_items || [];
-  if (panel && items.length) {
-    panel.innerHTML = items.map(item => `
-      <div class="data-list-row">
-        <span>${item.section || 'Pork'}: ${item.type || 'Item'}</span>
-        <strong>${item.price_avg != null ? '$' + fmtNum(item.price_avg, 2) : '--'}</strong>
-        <em>${item.store_count ? fmtNum(item.store_count) + ' stores' : item.price_unit || ''}</em>
-      </div>
-    `).join('');
-  } else if (panel) {
-    panel.closest('.card')?.classList.add('is-hidden');
-  }
 }
 
 function buildInventoryTrade(inventoryTrade) {
@@ -1402,26 +1385,6 @@ function buildInputCostChart(inputIdx) {
 function buildCostsRisk(costs) {
   buildInputCostChart(costs.input_indices || {});
 
-  const feed = costs.feed_cost_index;
-  if (seriesHasData(feed)) {
-    registerRangeControl({
-      chartId: 'feedCostChart',
-      options: ['3y', '5y', '10y', 'all'],
-      defaultRange: '5y',
-      renderer(range) {
-        const { start, end } = getRangeSlice(feed.dates, range);
-        renderLineChart(
-          'feedCostChart',
-          feed.dates.slice(start, end),
-          [dataset('Corn/soymeal proxy index', feed.values.slice(start, end), C.redSoft, { fill: true, backgroundColor: 'rgba(220,38,38,0.08)' })],
-          'Index'
-        );
-      }
-    });
-  } else {
-    hideEmptyCard('feedCostChart');
-  }
-
   const margin = costs.monthly_cutout_net_spread;
   if (seriesHasData(margin)) {
     registerRangeControl({
@@ -1440,18 +1403,6 @@ function buildCostsRisk(costs) {
     });
   } else {
     hideEmptyCard('monthlyMarginChart');
-  }
-
-  const panel = document.getElementById('riskWatchPanel');
-  if (panel) {
-    const notes = costs.risk_watch || [];
-    panel.innerHTML = notes.map(note => `
-      <div class="risk-note">
-        <strong>${note.topic}</strong>
-        <p>${note.note}</p>
-        <a href="${note.url}" target="_blank" rel="noreferrer">${note.source}</a>
-      </div>
-    `).join('');
   }
 }
 
