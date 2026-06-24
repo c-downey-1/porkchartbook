@@ -15,6 +15,22 @@ Status key: 🔴 not started · 🟡 in progress · 🟢 delivered
 
 ---
 
+## Status update — 2026-06-24
+
+| # | Item | Status | Notes |
+|---|------|--------|-------|
+| 1 | US exports, product weight | 🟢 | **US Census** trade API at HS10 (ERS no longer publishes a product-weight pork workbook). `CENSUS_API_KEY` set; backfilled 2015–2026. → `inventory_trade.us_trade_product_weight.export_fresh_frozen` (HS 0203, comparable to Brazil) + `export_total`. |
+| 2 | Forecast production | 🟢 | WASDE machine-readable TXT → `forecasts.production`. |
+| 3 | Forecasted exports | 🟢 | WASDE → `forecasts.exports`. |
+| 4 | Forecasted price | 🟢 | WASDE hog price ("Barrows and gilts") → `forecasts.hog_price`. |
+| 5 | Per-capita & disappearance | 🟢 | ERS Food Availability CSV (annual, 1909–2021) → `retail_demand.per_capita_disappearance`. |
+| 6 | Retail vs foodservice | ⛔ | **Declined** — no pork-specific foodservice source without proprietary data (Circana etc.); the ERS Food Expenditure Series is all-food only. Placeholder stays hidden. |
+| 7 | Demand vs chicken & beef | 🟢 | FRED chicken/ground-beef/pork-chops retail prices → `retail_demand.fred_{chicken,beef,pork_chops}_price`. |
+| 8 | Top import cuts/products | 🟢 | **US Census** by HS10 → `inventory_trade.us_trade_product_weight.import_by_cut` (category view) + `import_top_products` (specific cuts: bellies, hams, bacon, offal…). |
+| 9 | Brazil SK/Canada/Colombia | 🟢 | Force-included (all have data); palette extended to keep destinations distinct. |
+
+---
+
 ## 1. US pork exports in PRODUCT weight  🔴
 - **Chart:** Pork Exports: US vs. Brazil (`tradeFlowChart`)
 - **Problem:** US exports are currently ingested in **carcass weight** (ERS carcass-wt

@@ -92,6 +92,33 @@ SOURCES = [
         "fingerprint": [("comexstat_pork_exports", "report_month", "flow = 'export'")],
     },
     {
+        "key": "census_trade",
+        "label": "US pork trade by HS, product weight (US Census)",
+        "label_short": "Census trade",
+        "tier": "long-term",
+        "probe": None,  # API call is the fetch; detect delta (no-ops without key)
+        "ingest": ingest.update_census,
+        "fingerprint": [("census_pork_trade", "report_month", "flow = 'export'")],
+    },
+    {
+        "key": "ers_food_avail",
+        "label": "ERS per-capita pork availability & disappearance",
+        "label_short": "ERS food avail",
+        "tier": "long-term",
+        "probe": None,  # cheap CSV; detect new year from the row delta
+        "ingest": ingest.ingest_ers_food_availability,
+        "fingerprint": [("ers_food_availability", "year", "commodity = 'pork'")],
+    },
+    {
+        "key": "wasde",
+        "label": "USDA WASDE pork forecasts (production, exports, hog price)",
+        "label_short": "WASDE",
+        "tier": "long-term",
+        "probe": None,  # small monthly text file; detect new vintage from the delta
+        "ingest": ingest.ingest_wasde,
+        "fingerprint": [("wasde_forecasts", "report_month", None)],
+    },
+    {
         "key": "nass",
         "label": "USDA NASS (hogs & pigs, slaughter, cold storage)",
         "label_short": "NASS",

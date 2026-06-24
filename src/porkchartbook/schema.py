@@ -159,6 +159,59 @@ TABLES = {
             PRIMARY KEY (report_month, flow, ncm_code, country)
         )
     """,
+    # USDA WASDE pork forecasts — production & exports (million lb) and the
+    # national hog price ("Barrows and gilts", $/cwt), by forecast vintage
+    # (report_month) and marketing_year. Each monthly WASDE adds a vintage row,
+    # so the table also captures how a marketing year's forecast is revised.
+    "wasde_forecasts": """
+        CREATE TABLE IF NOT EXISTS wasde_forecasts (
+            report_month       TEXT NOT NULL,
+            marketing_year     INTEGER NOT NULL,
+            metric             TEXT NOT NULL,
+            value              REAL,
+            unit               TEXT,
+            vintage_kind       TEXT,
+            source_url         TEXT,
+            fetched_at         TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (report_month, marketing_year, metric)
+        )
+    """,
+    # US per-capita pork availability + supply-and-use (domestic disappearance),
+    # USDA ERS Food Availability (Per Capita) Data System. Annual, tidy long
+    # format: one row per (commodity, year, attribute). value may be NULL where
+    # the source has no figure.
+    "ers_food_availability": """
+        CREATE TABLE IF NOT EXISTS ers_food_availability (
+            commodity          TEXT NOT NULL,
+            year               INTEGER NOT NULL,
+            attribute          TEXT NOT NULL,
+            value              REAL,
+            source_url         TEXT,
+            fetched_at         TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (commodity, year, attribute)
+        )
+    """,
+    # US pork trade in PRODUCT weight by HS code — U.S. Census International
+    # Trade API, monthly, all-country totals per HS6. net_kg is product weight
+    # (kilograms; qty_unit records the reported unit). Used to (a) give a US
+    # export total comparable to Brazil's product-weight Comex line and (b)
+    # break US imports down by cut/product. hs_category mirrors
+    # comexstat_pork_exports.ncm_category so the two sources align.
+    "census_pork_trade": """
+        CREATE TABLE IF NOT EXISTS census_pork_trade (
+            report_month       TEXT NOT NULL,
+            flow               TEXT NOT NULL,
+            hs_code            TEXT NOT NULL,
+            hs_category        TEXT NOT NULL,
+            hs_desc            TEXT,
+            value_usd          REAL,
+            net_kg             REAL,
+            qty_unit           TEXT,
+            source_url         TEXT,
+            fetched_at         TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (report_month, flow, hs_code)
+        )
+    """,
 }
 
 INDEXES = [
@@ -174,6 +227,10 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_comex_pork_month ON comexstat_pork_exports(report_month)",
     "CREATE INDEX IF NOT EXISTS idx_comex_pork_cat ON comexstat_pork_exports(ncm_category, report_month)",
     "CREATE INDEX IF NOT EXISTS idx_comex_pork_country ON comexstat_pork_exports(country, report_month)",
+    "CREATE INDEX IF NOT EXISTS idx_wasde_metric ON wasde_forecasts(metric, marketing_year, report_month)",
+    "CREATE INDEX IF NOT EXISTS idx_ers_food_avail ON ers_food_availability(commodity, year)",
+    "CREATE INDEX IF NOT EXISTS idx_census_pork_month ON census_pork_trade(report_month)",
+    "CREATE INDEX IF NOT EXISTS idx_census_pork_flow_cat ON census_pork_trade(flow, hs_category, report_month)",
     "CREATE INDEX IF NOT EXISTS idx_etl_log_source ON etl_log(source, slug_id, data_item)",
 ]
 

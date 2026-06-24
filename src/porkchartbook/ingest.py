@@ -28,11 +28,14 @@ from datetime import date, datetime, timedelta
 from . import db
 from . import parsers
 from .clients import ams_hog_client
+from .clients import census_trade_client
 from .clients import comexstat_client
+from .clients import ers_food_availability_client
 from .clients import ers_trade_pork_client
 from .clients import fred_client
 from .clients import mars_client
 from .clients import nass_client
+from .clients import wasde_client
 
 
 # ── NASS Series ───────────────────────────────────────────────────────────
@@ -175,6 +178,21 @@ FRED_SERIES = [
     {
         "series_id": "APU0000704111",
         "label": "Average retail bacon price",
+    },
+    # Competing-protein retail prices (BLS CPI average price, $/lb, US city
+    # average, monthly) — same keyless FRED mechanism, for the "demand vs.
+    # competing proteins" comparison against pork.
+    {
+        "series_id": "APU0000FD3101",
+        "label": "Average retail pork chops price",
+    },
+    {
+        "series_id": "APU0000706111",
+        "label": "Average retail chicken price (whole)",
+    },
+    {
+        "series_id": "APU0000703112",
+        "label": "Average retail ground beef price",
     },
     {
         "series_id": "GASDESW",
@@ -406,6 +424,96 @@ def update_comexstat(conn):
     return backfill_comexstat(conn, year_ge=date.today().year - 1)
 
 
+def ingest_wasde(conn):
+    """Fetch the latest WASDE pork forecasts (production, exports, hog price)."""
+    print(f"\n{'=' * 60}")
+    print("  USDA WASDE — Pork production / exports / hog-price forecasts")
+    print(f"{'=' * 60}")
+    try:
+        rows = wasde_client.fetch_forecast_rows()
+    except Exception as exc:
+        print(f"  WASDE fetch failed: {exc}")
+        return 0
+    if not rows:
+        return 0
+    count = db.upsert_rows(conn, "wasde_forecasts", rows)
+    vintages = [r["report_month"] for r in rows if r.get("report_month")]
+    if vintages:
+        db.log_fetch(conn, "wasde", min(vintages), max(vintages), count, data_item="pork_forecasts")
+    print(f"  WASDE complete: {count:,} rows")
+    return count
+
+
+def ingest_ers_food_availability(conn):
+    """Fetch ERS per-capita pork availability + supply-and-use (annual)."""
+    print(f"\n{'=' * 60}")
+    print("  ERS Food Availability — Pork per-capita & disappearance")
+    print(f"{'=' * 60}")
+    try:
+        rows = ers_food_availability_client.fetch_pork_rows()
+    except Exception as exc:
+        print(f"  ERS food availability fetch failed: {exc}")
+        return 0
+    if not rows:
+        return 0
+    count = db.upsert_rows(conn, "ers_food_availability", rows)
+    years = [str(r["year"]) for r in rows if r.get("year")]
+    if years:
+        db.log_fetch(conn, "ers_food_avail", min(years), max(years), count, data_item="red_meat_pork")
+    print(f"  ERS food availability complete: {count:,} rows")
+    return count
+
+
+def backfill_census(conn, year_ge=2010, year_le=None):
+    """Fetch US pork trade (product weight) by HS code from the Census API.
+
+    No-ops gracefully (0 rows) when CENSUS_API_KEY is not set.
+    """
+    year_le = year_le or date.today().year
+    print(f"\n{'=' * 60}")
+    print(f"  US Census — Pork Trade by HS, product weight (years {year_ge}-{year_le})")
+    print(f"{'=' * 60}")
+    try:
+        rows = census_trade_client.fetch_pork_trade(year_ge, year_le)
+    except Exception as exc:
+        print(f"  Census trade fetch failed: {exc}")
+        return 0
+    if not rows:
+        return 0
+    count = db.upsert_rows(conn, "census_pork_trade", rows)
+    months = [r["report_month"] for r in rows if r.get("report_month")]
+    if months:
+        db.log_fetch(conn, "census_trade", min(months), max(months), count, data_item="pork_hs_trade")
+    print(f"  Census trade complete: {count:,} rows")
+    return count
+
+
+def update_census(conn):
+    """Incremental Census update — trailing months only (each HS10 month pull is
+    a large response; trade revises a few months back). No-ops without a key."""
+    if not census_trade_client.api_key():
+        census_trade_client.fetch_pork_trade(0, 0)  # prints the no-key note
+        return 0
+    print(f"\n{'=' * 60}")
+    print("  US Census — Pork Trade by HS, product weight (trailing months)")
+    print(f"{'=' * 60}")
+    try:
+        rows = census_trade_client.fetch_pork_trade(
+            0, 0, months=census_trade_client.recent_months(4)
+        )
+    except Exception as exc:
+        print(f"  Census trade update failed: {exc}")
+        return 0
+    if not rows:
+        return 0
+    count = db.upsert_rows(conn, "census_pork_trade", rows)
+    months = [r["report_month"] for r in rows if r.get("report_month")]
+    if months:
+        db.log_fetch(conn, "census_trade", min(months), max(months), count, data_item="pork_hs_trade")
+    print(f"  Census trade update complete: {count:,} rows")
+    return count
+
+
 # ── Smoke tests ───────────────────────────────────────────────────────────
 
 def run_smoke_tests(conn):
@@ -478,6 +586,12 @@ def main():
                     help="Backfill FRED retail/feed proxy series")
     ap.add_argument("--backfill-comex", action="store_true",
                     help="Backfill Comex Stat Brazil pork exports")
+    ap.add_argument("--backfill-census", action="store_true",
+                    help="Backfill US Census pork trade by HS (product weight; needs CENSUS_API_KEY)")
+    ap.add_argument("--backfill-ers-food", action="store_true",
+                    help="Backfill ERS per-capita pork availability & disappearance (annual)")
+    ap.add_argument("--backfill-wasde", action="store_true",
+                    help="Fetch latest WASDE pork production/export/hog-price forecasts")
 
     # Update flags (incremental)
     ap.add_argument("--update", action="store_true",
@@ -490,6 +604,8 @@ def main():
                     help="Start year for AMS retail feature backfill (default: 2021)")
     ap.add_argument("--comex-year-ge", type=int, default=2010,
                     help="Start year for Comex Stat Brazil pork export backfill (default: 2010)")
+    ap.add_argument("--census-year-ge", type=int, default=2010,
+                    help="Start year for US Census pork-trade backfill (default: 2010)")
     ap.add_argument("--db", default=None,
                     help="Path to SQLite database file")
 
@@ -530,6 +646,15 @@ def main():
         if args.backfill_all or args.backfill_comex:
             backfill_comexstat(conn, year_ge=args.comex_year_ge)
 
+        if args.backfill_all or args.backfill_census:
+            backfill_census(conn, year_ge=args.census_year_ge)
+
+        if args.backfill_all or args.backfill_ers_food:
+            ingest_ers_food_availability(conn)
+
+        if args.backfill_all or args.backfill_wasde:
+            ingest_wasde(conn)
+
         if args.update:
             update_nass(conn)
             update_ams(conn)
@@ -538,11 +663,15 @@ def main():
             update_retail(conn)
             backfill_fred(conn)
             update_comexstat(conn)
+            update_census(conn)
+            ingest_ers_food_availability(conn)
+            ingest_wasde(conn)
 
         all_actions = [
             args.backfill_all, args.backfill_nass, args.backfill_ams,
             args.backfill_ers, args.backfill_retail, args.backfill_fred,
-            args.backfill_comex, args.update, args.status, args.smoke_test,
+            args.backfill_comex, args.backfill_census, args.backfill_ers_food,
+            args.backfill_wasde, args.update, args.status, args.smoke_test,
         ]
         if not any(all_actions):
             ap.print_help()

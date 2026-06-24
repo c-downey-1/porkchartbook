@@ -28,7 +28,12 @@ const DASH_COLORS = {
   slate: '#939598',
   red: '#991b1b',
   redSoft: '#dc2626',
-  seq: ['#F6851F', '#1F9EBC', '#013046', '#FDB714', '#8FCAE6', '#939598', '#E5700A']
+  // First 7 entries are the original palette; indices 0-6 are referenced
+  // positionally by several charts, so new colours are only ever APPENDED
+  // (never reordered). The extra hues give destination charts enough distinct
+  // colours when >7 series are shown (e.g. Brazil with forced destinations).
+  seq: ['#F6851F', '#1F9EBC', '#013046', '#FDB714', '#8FCAE6', '#939598', '#E5700A',
+        '#6BA539', '#8E4585', '#C8102E', '#A6761D', '#4F5D75']
 };
 
 const htmlLegendPlugin = {

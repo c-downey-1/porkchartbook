@@ -110,7 +110,15 @@ BRAZIL_COUNTRY_EN = {
     "República Dominicana": "Dominican Republic",
     "Albânia": "Albania",
     "Congo": "Congo",
+    "Canadá": "Canada",
+    "Colômbia": "Colombia",
 }
+
+# Destinations to force-include in the Brazil export chart (beyond the top-N by
+# volume), keyed by the Portuguese name Comex Stat returns. These mirror the
+# partners shown on the US export-destination chart so the two charts can be
+# compared directly. Each is emitted only if it actually has Brazil data.
+BRAZIL_FORCE_INCLUDE = ["Coreia do Sul", "Canadá", "Colômbia"]
 
 
 # -- Generic helpers -------------------------------------------------------
@@ -502,6 +510,12 @@ def build_retail_demand(conn):
         ]
 
     bacon = _fred_series(conn, "APU0000704111")
+    # Competing-protein retail prices ($/lb, BLS CPI average price) for the
+    # "demand vs. competing proteins" chart. Pork chops give an apples-to-apples
+    # pork line on the same BLS methodology as chicken and beef.
+    pork_chops = _fred_series(conn, "APU0000FD3101")
+    chicken = _fred_series(conn, "APU0000706111")
+    beef = _fred_series(conn, "APU0000703112")
     return {
         "feature_rate": _series(dates, feature),
         "activity_index": _series(dates, activity),
@@ -510,6 +524,140 @@ def build_retail_demand(conn):
         "featured_price_store_count": _series(price_dates, price_store_counts),
         "top_featured_items": top_items,
         "fred_bacon_price": _series(*bacon),
+        "fred_pork_chops_price": _series(*pork_chops),
+        "fred_chicken_price": _series(*chicken),
+        "fred_beef_price": _series(*beef),
+        "per_capita_disappearance": build_per_capita_disappearance(conn),
+    }
+
+
+def build_forecasts(conn):
+    """USDA WASDE pork forecasts: production & exports (million lb) and the
+    national hog price ($/cwt). Exposes the latest vintage's marketing-year
+    projections plus the per-vintage revision history. Empty when no data."""
+    METRICS = [
+        ("pork_production", "production", "million lb"),
+        ("pork_exports", "exports", "million lb"),
+        ("hog_price", "hog_price", "$/cwt"),
+    ]
+    empty = {
+        "source": "USDA WASDE",
+        "vintage": None,
+        "production": {"unit": "million lb", "years": [], "values": [], "kinds": []},
+        "exports": {"unit": "million lb", "years": [], "values": [], "kinds": []},
+        "hog_price": {"unit": "$/cwt", "years": [], "values": [], "kinds": []},
+        "history": {metric: {"vintages": [], "series": {}} for metric, _, _ in METRICS},
+    }
+    rows = conn.execute(
+        """
+        SELECT report_month, marketing_year, metric, value, vintage_kind
+        FROM wasde_forecasts
+        WHERE value IS NOT NULL
+        ORDER BY report_month, marketing_year
+        """
+    ).fetchall()
+    if not rows:
+        return empty
+
+    vintages = sorted({r[0] for r in rows})
+    latest = vintages[-1]
+    # (metric, year) -> {vintage: (value, kind)}
+    cells = defaultdict(dict)
+    for report_month, marketing_year, metric, value, kind in rows:
+        cells[(metric, marketing_year)][report_month] = (value, kind)
+
+    out = {"source": "USDA WASDE", "vintage": latest, "history": {}}
+    for metric, out_key, unit in METRICS:
+        years = sorted({my for (m, my) in cells if m == metric})
+        latest_block = {"unit": unit, "years": [], "values": [], "kinds": []}
+        for year in years:
+            cell = cells[(metric, year)].get(latest)
+            if not cell:
+                continue
+            latest_block["years"].append(str(year))
+            latest_block["values"].append(cell[0])
+            latest_block["kinds"].append(cell[1])
+        out[out_key] = latest_block
+        # Revision history: one line per marketing year across vintages.
+        series = {}
+        for year in years:
+            series[str(year)] = [
+                cells[(metric, year)].get(v, (None, None))[0] for v in vintages
+            ]
+        out["history"][metric] = {"vintages": vintages, "series": series}
+    return out
+
+
+def build_per_capita_disappearance(conn):
+    """US per-capita pork availability + supply-and-use (domestic disappearance)
+    from ERS Food Availability (annual). Empty structures when no data loaded."""
+    PER_CAP = {
+        "boneless": "Food availability-Per capita availability-Boneless-Pounds",
+        "retail": "Food availability-Per capita availability-Retail-Pounds",
+        "carcass": "Food availability-Per capita availability-Carcass-Pounds",
+    }
+    DISAPPEARANCE = "Food availability-Total-Carcass-Million pounds"
+    BALANCE = {
+        "production": "Supply-Production-Million pounds",
+        "imports": "Supply-Imports-Million pounds",
+        "beginning_stocks": "Supply-Beginning stocks-Million pounds",
+        "total_supply": "Supply-Total-Million pounds",
+        "exports": "Nonfood use-Exports-Million pounds",
+        "shipments_to_territories": "Nonfood use-Shipments to U.S. territories-Million pounds",
+        "ending_stocks": "Nonfood use-Ending stocks-Million pounds",
+        "disappearance": DISAPPEARANCE,
+        "population_millions": "U.S. population, July 1-Millions",
+        "per_capita_boneless": PER_CAP["boneless"],
+    }
+    empty = {
+        "source": "USDA ERS Food Availability (Per Capita) Data System",
+        "cadence": "annual",
+        "per_capita": {
+            "unit": "lb per person per year",
+            "boneless": _series(), "retail": _series(), "carcass": _series(),
+        },
+        "domestic_disappearance": {"unit": "million lb", "dates": [], "values": []},
+        "supply_use_latest": {},
+    }
+    rows = conn.execute(
+        """
+        SELECT year, attribute, value
+        FROM ers_food_availability
+        WHERE commodity = 'pork' AND value IS NOT NULL
+        """
+    ).fetchall()
+    if not rows:
+        return empty
+
+    by_year = defaultdict(dict)
+    for year, attribute, value in rows:
+        by_year[year][attribute] = value
+    years = sorted(by_year)
+    labels = [str(y) for y in years]
+
+    def col(attr):
+        return [by_year[y].get(attr) for y in years]
+
+    per_capita = {
+        "unit": "lb per person per year",
+        "boneless": _series(labels, col(PER_CAP["boneless"])),
+        "retail": _series(labels, col(PER_CAP["retail"])),
+        "carcass": _series(labels, col(PER_CAP["carcass"])),
+    }
+    disappearance = {"unit": "million lb", "dates": labels, "values": col(DISAPPEARANCE)}
+
+    latest_year = years[-1]
+    latest = by_year[latest_year]
+    supply_use_latest = {"year": latest_year, "unit": "million lb"}
+    for key, attr in BALANCE.items():
+        supply_use_latest[key] = latest.get(attr)
+
+    return {
+        "source": "USDA ERS Food Availability (Per Capita) Data System",
+        "cadence": "annual",
+        "per_capita": per_capita,
+        "domestic_disappearance": disappearance,
+        "supply_use_latest": supply_use_latest,
     }
 
 
@@ -611,10 +759,12 @@ def build_brazil_exports(conn, top_n=6):
     country_by_month = defaultdict(lambda: defaultdict(float))
     last_12 = sorted({report_month for report_month, _, _ in rows})[-12:]
     dest_totals = defaultdict(float)
+    all_time_totals = defaultdict(float)
     for report_month, country, net_kg in rows:
         kg = net_kg or 0
         total_by_month[report_month] += kg
         country_by_month[report_month][country] += kg
+        all_time_totals[country] += kg
         if report_month in last_12:
             dest_totals[country] += kg
 
@@ -625,6 +775,11 @@ def build_brazil_exports(conn, top_n=6):
     top_countries = [name for _, name in sorted(
         ((kg, country) for country, kg in dest_totals.items()), reverse=True
     )[:top_n]]
+    # Force-include strategic destinations (only if they actually have Brazil
+    # data) so this chart shows the same partners as the US export chart.
+    for country in BRAZIL_FORCE_INCLUDE:
+        if country not in top_countries and all_time_totals.get(country):
+            top_countries.append(country)
     series = {}
     for country in top_countries:
         label = BRAZIL_COUNTRY_EN.get(country, country)
@@ -637,6 +792,139 @@ def build_brazil_exports(conn, top_n=6):
         "unit": "million lb",
         "total": _series(months, total_values),
         "by_destination": {"dates": months, "series": series},
+    }
+
+
+# Human-readable labels for the swine HS categories used by the Census + Comex
+# clients (shared category keys), for the import/export cut breakdowns.
+HS_CATEGORY_LABELS = {
+    "fresh_frozen": "Fresh / frozen (HS 0203)",
+    "offal": "Offal (HS 0206)",
+    "fat": "Fat & lard (HS 0209)",
+    "salted_dried_smoked": "Cured: ham/bacon (HS 0210)",
+    "prepared": "Prepared / preserved (HS 1602)",
+    "other": "Other",
+}
+
+
+def build_census_trade(conn):
+    """US pork trade in PRODUCT weight from the Census API (census_pork_trade).
+
+    Returns monthly export/import totals in million lb (so the US export line is
+    comparable to Brazil's product-weight Comex line) plus a by-cut breakdown for
+    the import/export "cuts" charts. Degrades to empty structures when the table
+    has no rows (e.g. CENSUS_API_KEY not set), so the chart placeholders stay
+    hidden until the data lands.
+    """
+    empty = {
+        "unit": "million lb",
+        "export_total": _series(),            # all pork categories
+        "export_fresh_frozen": _series(),     # HS 0203 only — matches Brazil scope
+        "import_total": _series(),
+        "import_by_cut": {"dates": [], "series": {}},
+        "export_by_cut": {"dates": [], "series": {}},
+        "import_top_products": {"dates": [], "series": {}},
+        "export_top_products": {"dates": [], "series": {}},
+    }
+    rows = conn.execute(
+        """
+        SELECT report_month, flow, hs_category, hs_code, hs_desc, net_kg, qty_unit
+        FROM census_pork_trade
+        WHERE net_kg IS NOT NULL
+        ORDER BY report_month
+        """
+    ).fetchall()
+    if not rows:
+        return empty
+
+    # Convert reported quantity to million lb. Quantity 1 for these HS chapters is
+    # kilograms; honour the unit string defensively in case Census reports tonnes.
+    def to_million_lb(net_qty, unit):
+        if net_qty is None:
+            return 0.0
+        factor = KG_TO_LB
+        if (unit or "").upper() in ("T", "MT", "TON", "TONS"):
+            factor = KG_TO_LB * 1000.0
+        return net_qty * factor / 1e6
+
+    def product_label(hs_desc, hs_code):
+        text = " ".join((hs_desc or "").split()).title()
+        if not text:
+            return f"HS {hs_code}"
+        return text if len(text) <= 48 else text[:45].rstrip() + "…"
+
+    flow_total = {"export": defaultdict(float), "import": defaultdict(float)}
+    flow_ff = {"export": defaultdict(float)}
+    flow_cat = {
+        "export": defaultdict(lambda: defaultdict(float)),
+        "import": defaultdict(lambda: defaultdict(float)),
+    }
+    flow_prod = {  # per-HS10 product: month -> code -> million lb
+        "export": defaultdict(lambda: defaultdict(float)),
+        "import": defaultdict(lambda: defaultdict(float)),
+    }
+    product_label_by_code = {}
+    all_months = set()
+    for report_month, flow, hs_category, hs_code, hs_desc, net_kg, qty_unit in rows:
+        mlb = to_million_lb(net_kg, qty_unit)
+        if flow not in flow_total:
+            continue
+        all_months.add(report_month)
+        flow_total[flow][report_month] += mlb
+        flow_cat[flow][report_month][hs_category] += mlb
+        flow_prod[flow][report_month][hs_code] += mlb
+        product_label_by_code[hs_code] = product_label(hs_desc, hs_code)
+        if flow == "export" and hs_category == "fresh_frozen":
+            flow_ff["export"][report_month] += mlb
+
+    last_12 = sorted(all_months)[-12:]
+
+    def total_series(by_month):
+        months = sorted(by_month)
+        return _series(months, [by_month[m] for m in months])
+
+    def cut_breakdown(flow):
+        by_month_cat = flow_cat[flow]
+        months = sorted(by_month_cat)
+        cat_totals = defaultdict(float)
+        for month in months:
+            for cat, val in by_month_cat[month].items():
+                cat_totals[cat] += val
+        cats = [c for c, _ in sorted(cat_totals.items(), key=lambda kv: -kv[1])]
+        series = {
+            HS_CATEGORY_LABELS.get(cat, cat): [
+                by_month_cat[month].get(cat) for month in months
+            ]
+            for cat in cats
+        }
+        return {"dates": months, "series": series}
+
+    def top_products(flow, count=8):
+        by_month_code = flow_prod[flow]
+        months = sorted(by_month_code)
+        code_totals = defaultdict(float)
+        for month in last_12:
+            for code, val in by_month_code.get(month, {}).items():
+                code_totals[code] += val
+        top_codes = [c for c, _ in sorted(code_totals.items(), key=lambda kv: -kv[1])[:count]]
+        series = {}
+        for code in top_codes:
+            label = product_label_by_code.get(code, f"HS {code}")
+            # Disambiguate any rare label collision by appending the HS code.
+            if label in series:
+                label = f"{label} ({code})"
+            series[label] = [by_month_code.get(month, {}).get(code) for month in months]
+        return {"dates": months, "series": series}
+
+    return {
+        "unit": "million lb",
+        "export_total": total_series(flow_total["export"]),
+        "export_fresh_frozen": total_series(flow_ff["export"]),
+        "import_total": total_series(flow_total["import"]),
+        "import_by_cut": cut_breakdown("import"),
+        "export_by_cut": cut_breakdown("export"),
+        "import_top_products": top_products("import"),
+        "export_top_products": top_products("export"),
     }
 
 
@@ -665,6 +953,7 @@ def build_inventory_trade(conn, slaughter_production):
         "trade": trade,
         "export_share_of_production": _series(*export_share),
         "brazil_exports": build_brazil_exports(conn),
+        "us_trade_product_weight": build_census_trade(conn),
     }
 
 
@@ -1050,6 +1339,7 @@ def build_data_json(conn):
         "inventory_trade": inventory_trade,
         "trade": inventory_trade["trade"],
         "costs_risk": costs,
+        "forecasts": build_forecasts(conn),
         "insights": build_insights(herd, slaughter, prices, retail, inventory_trade, costs),
         "data_freshness": build_data_freshness(conn),
         "meta": {

@@ -3,9 +3,10 @@
 const C = DASH_COLORS;
 
 // Shared destination → colour map so the same country reads the same colour across
-// the US and Brazil export-destination charts. Brazil-only countries reuse colours
-// from US-only countries (they never appear in the same chart). Falls back to the
-// sequential palette for anything unlisted.
+// the US and Brazil export-destination charts. Every listed country gets a unique
+// colour so the Brazil chart stays distinct even when its top destinations
+// (Philippines, Chile, Hong Kong) appear alongside the force-included US partners
+// (South Korea, Canada, Colombia). Falls back to the sequential palette otherwise.
 const DEST_COLORS = {
   'Mexico': C.seq[0],
   'Japan': C.seq[1],
@@ -13,9 +14,9 @@ const DEST_COLORS = {
   'South Korea': C.seq[3],
   'Canada': C.seq[4],
   'Colombia': C.seq[6],
-  'Philippines': C.seq[3],
-  'Chile': C.seq[4],
-  'Hong Kong': C.seq[6],
+  'Philippines': C.seq[7],
+  'Chile': C.seq[8],
+  'Hong Kong': C.seq[9],
 };
 function destColor(country, i) {
   return DEST_COLORS[country] || C.seq[i % C.seq.length];
