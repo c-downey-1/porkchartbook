@@ -245,8 +245,7 @@ function setPorkChartSources() {
     herdBreedingMarketChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     marketWeightChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     sowsFarrowedChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
-    pigsPerLitterChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
-    herdPigCropChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
+    farrowComboTestChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     slaughterHeadChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
     porkProductionChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
     carcassWeightChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
@@ -257,7 +256,7 @@ function setPorkChartSources() {
     sowSlaughterChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     hogPriceChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
     cutoutChart: `Chart: Innovate Animal Ag • Source: ${amsPk}`,
-    hogCutoutSpreadChart: `Chart: Innovate Animal Ag • Source: ${amsHg} / ${amsPk}`,
+    spreadMergeTestChart: `Chart: Innovate Animal Ag • Source: ${amsHg} / ${amsPk}`,
     primalsChart: `Chart: Innovate Animal Ag • Source: ${amsPk}`,
     retailFeatureChart: `Chart: Innovate Animal Ag • Source: ${amsRetail}`,
     retailPriceChart: `Chart: Innovate Animal Ag • Source: ${amsRetail} / ${fred}`,
@@ -269,7 +268,6 @@ function setPorkChartSources() {
     exportShareChart: `Chart: Innovate Animal Ag • Source: ${ers} / ${nass}`,
     brazilDestinationsChart: `Chart: Innovate Animal Ag • Source: ${comex}`,
     inputCostChart: `Chart: Innovate Animal Ag • Sources: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a> · <a href="https://fred.stlouisfed.org/series/GASDESW" target="_blank" rel="noreferrer">FRED GASDESW</a> · <a href="https://fred.stlouisfed.org/series/APU000072610" target="_blank" rel="noreferrer">FRED APU000072610</a>`,
-    monthlyMarginChart: `Chart: Innovate Animal Ag • Source: ${amsHg} / ${amsPk}`,
   };
   Object.entries(srcMap).forEach(([id, html]) => appendCardSource(id, html));
 }
@@ -385,7 +383,7 @@ function buildHerd(herd) {
   if (seriesHasData(breeding)) {
     registerRangeControl({
       chartId: 'herdBreedingMarketChart',
-      options: ['5y', '10y', 'all'],
+      options: ['1y', '5y', '10y', 'all'],
       defaultRange: '10y',
       renderer(range) {
         // Quarterly data: count range windows in quarters and use a category
@@ -397,7 +395,18 @@ function buildHerd(herd) {
           quarterLabels(dates),
           [dataset('Breeding stock', toMillions(breeding.values.slice(start, end)), C.navy, { fill: true, backgroundColor: 'rgba(1,48,70,0.08)' })],
           'Million head',
-          { categoryX: true, maxTicks: 10 }
+          {
+            categoryX: true, maxTicks: 10,
+            tooltip: {
+              callbacks: {
+                label(ctx) {
+                  const v = Number(ctx.parsed.y);
+                  if (!Number.isFinite(v)) return ctx.dataset.label || '';
+                  return `${ctx.dataset.label}: ${fmtNum(v, 2)}`;
+                }
+              }
+            }
+          }
         );
       }
     });
@@ -468,7 +477,7 @@ function buildHerd(herd) {
   if (seriesHasData(sows)) {
     registerRangeControl({
       chartId: 'sowsFarrowedChart',
-      options: ['5y', '10y', 'all'],
+      options: ['1y', '5y', '10y', 'all'],
       defaultRange: '10y',
       renderer(range) {
         const { start, end } = getRangeSlice(sows.dates, range);
@@ -476,7 +485,19 @@ function buildHerd(herd) {
           'sowsFarrowedChart',
           sows.dates.slice(start, end),
           [dataset('Sows farrowed', toMillions(sows.values.slice(start, end)), C.navy)],
-          'Million head'
+          'Million head',
+          {
+            xRotation: 45,
+            tooltip: {
+              callbacks: {
+                label(ctx) {
+                  const v = Number(ctx.parsed.y);
+                  if (!Number.isFinite(v)) return ctx.dataset.label || '';
+                  return `${ctx.dataset.label}: ${fmtNum(v, 2)}`;
+                }
+              }
+            }
+          }
         );
       }
     });
@@ -484,52 +505,58 @@ function buildHerd(herd) {
     hideEmptyCard('sowsFarrowedChart');
   }
 
-  const litter = herd.pigs_per_litter;
-  if (seriesHasData(litter)) {
+  // Pig crop (line, left million-head axis) + pigs per litter (orange diamonds,
+  // right axis). Replaces the former standalone pig-crop and pigs-per-litter cards.
+  const cPig = herd.pig_crop, cLitter = herd.pigs_per_litter;
+  if (seriesHasData(cPig) || seriesHasData(cLitter)) {
+    const allDates = [...new Set([
+      ...(cPig?.dates || []), ...(cLitter?.dates || [])
+    ])].sort();
+    const mapOf = s => Object.fromEntries((s?.dates || []).map((d, i) => [d, s.values[i]]));
+    const pcMap = mapOf(cPig), plMap = mapOf(cLitter);
     registerRangeControl({
-      chartId: 'pigsPerLitterChart',
-      options: ['5y', '10y', 'all'],
+      chartId: 'farrowComboTestChart',
+      options: ['1y', '5y', '10y', 'all'],
       defaultRange: '10y',
       renderer(range) {
-        const { start, end } = getRangeSlice(litter.dates, range);
-        renderLineChart(
-          'pigsPerLitterChart',
-          litter.dates.slice(start, end),
-          [dataset('Pigs per litter', litter.values.slice(start, end), C.gold, { fill: true, backgroundColor: 'rgba(253,183,20,0.10)' })],
-          'Pigs per litter'
-        );
+        const { start, end } = getRangeSlice(allDates, range);
+        const labels = allDates.slice(start, end);
+        const pcVals = labels.map(d => pcMap[d] != null ? pcMap[d] / 1e6 : null);
+        const plVals = labels.map(d => plMap[d] != null ? plMap[d] : null);
+        // Anchor each axis to its own data band so both series show their
+        // month-to-month variation instead of sitting flat.
+        const band = (vals, padFloor) => {
+          const present = vals.filter(v => v != null);
+          if (!present.length) return {};
+          const lo = Math.min(...present), hi = Math.max(...present);
+          const pad = Math.max(padFloor, (hi - lo) * 0.4);
+          return { min: Math.floor((lo - pad) * 10) / 10, max: Math.ceil((hi + pad) * 10) / 10 };
+        };
+        const yBand = band(pcVals, 0.2);
+        const y2Band = band(plVals, 0.5);
+        const ctx = document.getElementById('farrowComboTestChart');
+        if (!ctx) return;
+        destroyChart('farrowComboTestChart');
+        const opts = baseOptions('Million head', {
+          chartId: 'farrowComboTestChart', y2: 'Pigs per litter', aspect: PORK_CHART_ASPECT,
+          yMin: yBand.min, yMax: yBand.max, y2Min: y2Band.min, y2Max: y2Band.max,
+          xRotation: 45
+        });
+        charts['farrowComboTestChart'] = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              dataset('Pig crop', pcVals, C.navy, { yAxisID: 'y', order: 2, type: 'line', borderWidth: 1.8, pointRadius: 0, pointHoverRadius: 5 }),
+              dataset('Pigs per litter', plVals, C.orange, { yAxisID: 'y2', order: 1, type: 'line', borderWidth: 1.8, pointRadius: 0, pointHoverRadius: 6 })
+            ]
+          },
+          options: opts
+        });
       }
     });
   } else {
-    hideEmptyCard('pigsPerLitterChart');
-  }
-
-  const pigCrop = herd.pig_crop;
-  if (seriesHasData(pigCrop)) {
-    registerRangeControl({
-      chartId: 'herdPigCropChart',
-      options: ['3y', '5y', '10y', 'all'],
-      defaultRange: '5y',
-      renderer(range) {
-        const { start, end } = getRangeSlice(pigCrop.dates, range);
-        const values = toMillions(pigCrop.values.slice(start, end));
-        // Pig crop sits in a high, narrow band; anchor the axis near the visible
-        // range so period-to-period changes stand out instead of looking flat.
-        const present = values.filter(v => v != null);
-        const lo = present.length ? Math.min(...present) : 0;
-        const hi = present.length ? Math.max(...present) : 1;
-        const pad = Math.max(0.2, (hi - lo) * 0.2);
-        renderBarChart(
-          'herdPigCropChart',
-          pigCrop.dates.slice(start, end),
-          [dataset('Pig crop', values, C.gold)],
-          'Million head',
-          { yMin: Math.floor(lo - pad), yMax: Math.ceil(hi + pad) }
-        );
-      }
-    });
-  } else {
-    hideEmptyCard('herdPigCropChart');
+    hideEmptyCard('farrowComboTestChart');
   }
 }
 
@@ -699,6 +726,9 @@ function buildNassSlaughter(sp) {
           categoryX: true,
           maxTicks: 12,
           tooltip: {
+            itemSort(a, b) {
+              return Number(b.dataset.label) - Number(a.dataset.label);
+            },
             callbacks: {
               label(ctx) {
                 const v = Number(ctx.parsed.y);
@@ -806,17 +836,22 @@ function buildNassSlaughter(sp) {
           'sowSlaughterChart',
           labels,
           [
-            dataset('Sows', labels.map(d => sowsMap[d] != null ? sowsMap[d] / 1e3 : null), C.orange),
-            dataset('Boars', labels.map(d => boarsMap[d] != null ? boarsMap[d] / 1e3 : null), C.slate),
+            dataset('Sows', labels.map(d => sowsMap[d] != null ? sowsMap[d] / 1e3 : null), C.orange, { stack: 'cull' }),
+            dataset('Boars', labels.map(d => boarsMap[d] != null ? boarsMap[d] / 1e3 : null), C.slate, { stack: 'cull' }),
           ],
           'Thousand head',
           {
+            stacked: true,
             tooltip: {
               callbacks: {
                 label(ctx) {
                   const v = Number(ctx.parsed.y);
                   if (!Number.isFinite(v)) return ctx.dataset.label || '';
                   return `${ctx.dataset.label}: ${fmtNum(v, 1)}k`;
+                },
+                footer(items) {
+                  const total = items.reduce((sum, it) => sum + (Number(it.parsed.y) || 0), 0);
+                  return `Total: ${fmtNum(total, 1)}k head`;
                 }
               }
             }
@@ -866,20 +901,36 @@ function buildPrices(prices) {
     hideEmptyCard('cutoutChart');
   }
 
+  // Cutout less net hog price — daily spread (light line) + its monthly average overlaid (bold).
   const spread = prices.cutout_net_spread || prices.cutout_base_spread;
   if (seriesHasData(spread)) {
+    // Monthly average computed from the daily series itself.
+    const buckets = {};
+    spread.dates.forEach((d, i) => {
+      const v = spread.values[i];
+      if (v == null) return;
+      const m = d.slice(0, 7);
+      (buckets[m] = buckets[m] || { s: 0, n: 0 });
+      buckets[m].s += v; buckets[m].n += 1;
+    });
+    const monthAvg = {};
+    Object.keys(buckets).forEach(m => { monthAvg[m] = buckets[m].s / buckets[m].n; });
+    const DAYS = { '1m': 31, '3m': 92, '1y': 366, '2y': 731, '5y': 1827, all: null };
     registerRangeControl({
-      chartId: 'hogCutoutSpreadChart',
-      options: HF_OPTIONS,
-      defaultRange: HF_DEFAULT,
+      chartId: 'spreadMergeTestChart',
+      options: ['1m', '3m', '1y', '2y', '5y', 'all'],
+      defaultRange: '2y',
       renderer(range) {
-        renderHfLine('hogCutoutSpreadChart', [
-          { label: 'Cutout less net hog price', series: spread, color: C.orange, extra: { fill: true, backgroundColor: 'rgba(246,133,31,0.10)' } },
-        ], '$/cwt', range);
+        const { dates, values } = sliceTrailingDays(spread.dates, spread.values, DAYS[range]);
+        const overlay = dates.map(d => monthAvg[d.slice(0, 7)] != null ? monthAvg[d.slice(0, 7)] : null);
+        renderLineChart('spreadMergeTestChart', dates, [
+          dataset('Daily spread', values, C.orange, { borderWidth: 1.2, pointRadius: 0, order: 2, fill: false }),
+          dataset('Monthly average', overlay, C.navy, { borderWidth: 2.6, pointRadius: 0, order: 1, tension: 0, fill: false }),
+        ], '$/cwt');
       }
     });
   } else {
-    hideEmptyCard('hogCutoutSpreadChart');
+    hideEmptyCard('spreadMergeTestChart');
   }
 
   // Primal values — exception: short HF frames plus the longer ranges.
@@ -1386,26 +1437,6 @@ function buildInputCostChart(inputIdx) {
 
 function buildCostsRisk(costs) {
   buildInputCostChart(costs.input_indices || {});
-
-  const margin = costs.monthly_cutout_net_spread;
-  if (seriesHasData(margin)) {
-    registerRangeControl({
-      chartId: 'monthlyMarginChart',
-      options: ['1y', '2y', '3y', '5y', 'all'],
-      defaultRange: '3y',
-      renderer(range) {
-        const { start, end } = getRangeSlice(margin.dates, range);
-        renderLineChart(
-          'monthlyMarginChart',
-          margin.dates.slice(start, end),
-          [dataset('Monthly cutout-net spread', margin.values.slice(start, end), C.navy, { fill: true, backgroundColor: 'rgba(1,48,70,0.08)' })],
-          '$/cwt'
-        );
-      }
-    });
-  } else {
-    hideEmptyCard('monthlyMarginChart');
-  }
 }
 
 function initMonthlySignup(data) {

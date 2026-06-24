@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/split-dashboard.css?v=20260623b">
+<link rel="stylesheet" href="assets/split-dashboard.css?v=20260623n">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <!-- Microsoft Clarity - activate on launch
 <script type="text/javascript">
@@ -94,20 +94,15 @@
             <div class="sub">Million head, quarterly. Stacked by market weight class — use the checkbox to include breeding stock.</div>
             <canvas id="marketWeightChart"></canvas>
           </article>
-          <article class="card wide" id="herdPigCropWrap">
-            <h3>Pig Crop</h3>
-            <div class="sub">Million head, monthly where available.</div>
-            <canvas id="herdPigCropChart"></canvas>
+          <article class="card half" id="farrowComboTestWrap">
+            <h3>Pig Crop &amp; Pigs Per Litter</h3>
+            <div class="sub">Pig crop (million head, left) and Pigs per litter (orange, right). Pigs saved.</div>
+            <canvas id="farrowComboTestChart"></canvas>
           </article>
           <article class="card half" id="sowsFarrowedWrap">
             <h3>Sows Farrowed</h3>
             <div class="sub">Million head.</div>
             <canvas id="sowsFarrowedChart"></canvas>
-          </article>
-          <article class="card half" id="pigsPerLitterWrap">
-            <h3>Pigs Per Litter</h3>
-            <div class="sub">Pigs per litter.</div>
-            <canvas id="pigsPerLitterChart"></canvas>
           </article>
           <article class="card wide" id="herdBreedingMarketWrap">
             <h3>Breeding Stock Inventory</h3>
@@ -116,7 +111,7 @@
           </article>
           <article class="card wide" id="sowSlaughterWrap">
             <h3>Sow &amp; Boar Slaughter</h3>
-            <div class="sub">Thousand head per month (federally inspected) — breeding-herd cull signal.</div>
+            <div class="sub">Thousand head per month (federally inspected).</div>
             <canvas id="sowSlaughterChart"></canvas>
           </article>
           <article class="card wide" id="coldStorageWrap">
@@ -238,15 +233,10 @@
           <article class="card wide placeholder">
             <h3>Farm-to-Wholesale-to-Retail Price Spread <span class="planned-tag">Planned</span></h3>
           </article>
-          <article class="card half" id="hogCutoutSpreadWrap">
+          <article class="card wide" id="spreadMergeTestWrap">
             <h3>Cutout Less Net Hog Price</h3>
-            <div class="sub">$/cwt spread proxy.</div>
-            <canvas id="hogCutoutSpreadChart"></canvas>
-          </article>
-          <article class="card half" id="monthlyMarginWrap">
-            <h3>Monthly Cutout-Net Spread</h3>
-            <div class="sub">$/cwt, monthly average cutout less net hog price.</div>
-            <canvas id="monthlyMarginChart"></canvas>
+            <div class="sub">$/cwt — daily spread (light line) with the monthly average overlaid (bold navy).</div>
+            <canvas id="spreadMergeTestChart"></canvas>
           </article>
           <article class="card wide placeholder">
             <h3>Forecasted Price <span class="planned-tag">Planned</span></h3>
@@ -299,7 +289,7 @@
     </main>
   </div>
 </div>
-<script src="assets/dashboard-common.js?v=20260623b"></script>
-<script src="assets/pork-dashboard.js?v=20260623b"></script>
+<script src="assets/dashboard-common.js?v=20260623n"></script>
+<script src="assets/pork-dashboard.js?v=20260623n"></script>
 </body>
 </html>

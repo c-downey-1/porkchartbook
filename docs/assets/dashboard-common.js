@@ -580,8 +580,8 @@ function baseOptions(yLabel, extra = {}) {
           autoSkip: false,
           color: '#627684',
           padding: isMobileWidth() ? 6 : 10,
-          maxRotation: 0,
-          minRotation: 0,
+          maxRotation: extra.xRotation != null ? extra.xRotation : 0,
+          minRotation: extra.xRotation != null ? extra.xRotation : 0,
           font: { size: isMobileWidth() ? 10 : 13 },
           callback(value) {
             const label = this.getLabelForValue(value);
