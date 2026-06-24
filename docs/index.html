@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/split-dashboard.css?v=20260623u">
+<link rel="stylesheet" href="assets/split-dashboard.css?v=20260624a">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <!-- Microsoft Clarity - activate on launch
 <script type="text/javascript">
@@ -119,8 +119,10 @@
             <div class="sub">Million lb, frozen pork stocks and major cuts.</div>
             <canvas id="coldStorageChart"></canvas>
           </article>
-          <article class="card wide placeholder">
-            <h3>Forecast Production <span class="planned-tag">Planned</span></h3>
+          <article class="card wide" id="forecastProductionWrap">
+            <h3>Forecast Production</h3>
+            <div class="sub">USDA WASDE US commercial pork production forecast, million lb. The most recent marketing year is the estimate; following years are projections.</div>
+            <canvas id="forecastProductionChart"></canvas>
           </article>
         </div>
       </section>
@@ -132,8 +134,10 @@
           <p>US consumption, retail and foodservice demand, and pork's position against competing proteins.</p>
         </div></div>
         <div class="grid">
-          <article class="card wide placeholder">
-            <h3>Per Capita Consumption &amp; Disappearance <span class="planned-tag">Planned</span></h3>
+          <article class="card wide" id="perCapitaWrap">
+            <h3>Per Capita Consumption &amp; Disappearance</h3>
+            <div class="sub">Per-capita pork availability (boneless, lb/person/yr, left axis) and total US domestic disappearance (million lb, right axis). USDA ERS Food Availability, annual.</div>
+            <canvas id="perCapitaChart"></canvas>
           </article>
           <article class="card wide placeholder">
             <h3>Retail &amp; Foodservice / Restaurant Demand <span class="planned-tag">Planned</span></h3>
@@ -143,8 +147,10 @@
             <div class="sub">Feature rate (left axis): the share of surveyed stores running a pork ad.<br>Activity index (right axis): a composite of the overall intensity of pork advertising (breadth + how many items/ads).</div>
             <canvas id="retailFeatureChart"></canvas>
           </article>
-          <article class="card wide placeholder">
-            <h3>Demand vs. Chicken and Beef <span class="planned-tag">Planned</span></h3>
+          <article class="card wide" id="proteinPriceWrap">
+            <h3>Demand vs. Chicken and Beef</h3>
+            <div class="sub">Average US retail price, $/lb (BLS CPI via FRED) — pork chops vs. whole chicken vs. ground beef, with bacon for reference.</div>
+            <canvas id="proteinPriceChart"></canvas>
           </article>
         </div>
       </section>
@@ -186,11 +192,15 @@
             <div class="sub">Million lb per quarter, stacked by source with an Other category totaling all US pork imports.</div>
             <canvas id="importSourcesChart"></canvas>
           </article>
-          <article class="card half placeholder">
-            <h3>Top Import Cuts / Products <span class="planned-tag">Planned</span></h3>
+          <article class="card half" id="importCutsWrap">
+            <h3>Top Import Cuts / Products</h3>
+            <div class="sub">Million lb per month, US pork imports by product type, stacked (US Census, product weight, by HS code).</div>
+            <canvas id="importCutsChart"></canvas>
           </article>
-          <article class="card wide placeholder">
-            <h3>Forecasted Exports <span class="planned-tag">Planned</span></h3>
+          <article class="card wide" id="forecastExportsWrap">
+            <h3>Forecasted Exports</h3>
+            <div class="sub">USDA WASDE US pork export forecast, million lb. The most recent marketing year is the estimate; following years are projections.</div>
+            <canvas id="forecastExportsChart"></canvas>
           </article>
         </div>
       </section>
@@ -209,7 +219,7 @@
           </article>
           <article class="card wide" id="feedPriceWrap">
             <h3>Cost of Soybean Meal and Corn</h3>
-            <div class="sub">Global corn and soybean-meal prices, USD per metric ton, monthly (FRED).</div>
+            <div class="sub">Daily CME corn and soybean-meal prices, USD per ton.</div>
             <canvas id="feedPriceChart"></canvas>
           </article>
           <article class="card wide" id="hogPriceWrap">
@@ -240,8 +250,10 @@
             <div class="sub">$/cwt — daily spread (light line) with the monthly average overlaid (bold navy).</div>
             <canvas id="spreadMergeTestChart"></canvas>
           </article>
-          <article class="card wide placeholder">
-            <h3>Forecasted Price <span class="planned-tag">Planned</span></h3>
+          <article class="card wide" id="forecastPriceWrap">
+            <h3>Forecasted Price</h3>
+            <div class="sub">USDA WASDE national hog price forecast (barrows &amp; gilts), $/cwt. The most recent marketing year is the estimate; following years are projections.</div>
+            <canvas id="forecastPriceChart"></canvas>
           </article>
         </div>
       </section>
@@ -299,7 +311,7 @@
     </main>
   </div>
 </div>
-<script src="assets/dashboard-common.js?v=20260623u"></script>
-<script src="assets/pork-dashboard.js?v=20260623u"></script>
+<script src="assets/dashboard-common.js?v=20260624a"></script>
+<script src="assets/pork-dashboard.js?v=20260624a"></script>
 </body>
 </html>

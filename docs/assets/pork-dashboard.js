@@ -260,6 +260,9 @@ function setPorkChartSources() {
   const ers = '<a href="https://www.ers.usda.gov/data-products/livestock-and-meat-international-trade-data/" target="_blank" rel="noreferrer">USDA ERS Trade</a>';
   const fred = '<a href="https://fred.stlouisfed.org/" target="_blank" rel="noreferrer">FRED</a>';
   const comex = '<a href="https://comexstat.mdic.gov.br/" target="_blank" rel="noreferrer">Brazil MDIC/SECEX Comex Stat</a>';
+  const wasde = '<a href="https://www.usda.gov/oce/commodity/wasde" target="_blank" rel="noreferrer">USDA WASDE</a>';
+  const ersFood = '<a href="https://www.ers.usda.gov/data-products/food-availability-per-capita-data-system" target="_blank" rel="noreferrer">USDA ERS Food Availability</a>';
+  const census = '<a href="https://www.census.gov/foreign-trade/data/" target="_blank" rel="noreferrer">US Census Trade</a>';
 
   const srcMap = {
     herdBreedingMarketChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
@@ -288,6 +291,12 @@ function setPorkChartSources() {
     exportShareChart: `Chart: Innovate Animal Ag • Source: ${ers} / ${nass}`,
     brazilDestinationsChart: `Chart: Innovate Animal Ag • Source: ${comex}`,
     feedPriceChart: `Chart: Innovate Animal Ag • Source: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a>`,
+    forecastProductionChart: `Chart: Innovate Animal Ag • Source: ${wasde}`,
+    forecastExportsChart: `Chart: Innovate Animal Ag • Source: ${wasde}`,
+    forecastPriceChart: `Chart: Innovate Animal Ag • Source: ${wasde}`,
+    perCapitaChart: `Chart: Innovate Animal Ag • Source: ${ersFood}`,
+    proteinPriceChart: `Chart: Innovate Animal Ag • Source: ${fred}`,
+    importCutsChart: `Chart: Innovate Animal Ag • Source: ${census}`,
     inputCostChart: `Chart: Innovate Animal Ag • Sources: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a> · <a href="https://fred.stlouisfed.org/series/GASDESW" target="_blank" rel="noreferrer">FRED GASDESW</a> · <a href="https://fred.stlouisfed.org/series/APU000072610" target="_blank" rel="noreferrer">FRED APU000072610</a>`,
   };
   Object.entries(srcMap).forEach(([id, html]) => appendCardSource(id, html));
@@ -1029,6 +1038,59 @@ function buildRetailDemand(retail) {
   } else {
     hideEmptyCard('retailPriceChart');
   }
+
+  // Per-capita pork availability (boneless, left) + total domestic disappearance
+  // (right). Annual ERS series; show the modern era for readability.
+  const pcd = retail.per_capita_disappearance || {};
+  const boneless = (pcd.per_capita || {}).boneless;
+  const disappearance = pcd.domestic_disappearance;
+  if (seriesHasData(boneless) || seriesHasData(disappearance)) {
+    const dates = [...new Set([...(boneless?.dates || []), ...(disappearance?.dates || [])])]
+      .filter(d => d >= '1980').sort();
+    const bMap = Object.fromEntries((boneless?.dates || []).map((d, i) => [d, boneless.values[i]]));
+    const dMap = Object.fromEntries((disappearance?.dates || []).map((d, i) => [d, disappearance.values[i]]));
+    renderLineChart(
+      'perCapitaChart',
+      dates,
+      [
+        dataset('Per-capita (boneless)', dates.map(d => bMap[d] ?? null), C.navy),
+        dataset('Domestic disappearance', dates.map(d => dMap[d] ?? null), C.gold, { yAxisID: 'y2' }),
+      ],
+      'lb / person / yr',
+      { y2: 'Million lb' }
+    );
+  } else {
+    hideEmptyCard('perCapitaChart');
+  }
+
+  // Pork vs. competing proteins — retail $/lb (BLS CPI via FRED).
+  const chops = retail.fred_pork_chops_price;
+  const chicken = retail.fred_chicken_price;
+  const beef = retail.fred_beef_price;
+  const baconRef = retail.fred_bacon_price;
+  if ([chops, chicken, beef].some(seriesHasData)) {
+    const all = [chops, chicken, beef, baconRef];
+    const dates = [...new Set(all.flatMap(s => s?.dates || []))].sort();
+    const mk = s => Object.fromEntries((s?.dates || []).map((d, i) => [d, s.values[i]]));
+    const cM = mk(chops), kM = mk(chicken), bM = mk(beef), baM = mk(baconRef);
+    registerRangeControl({
+      chartId: 'proteinPriceChart',
+      options: ['1y', '2y', '3y', '5y', '10y', 'all'],
+      defaultRange: '5y',
+      renderer(range) {
+        const { start, end } = getRangeSlice(dates, range);
+        const labels = dates.slice(start, end);
+        renderLineChart('proteinPriceChart', labels, [
+          dataset('Pork chops', labels.map(d => cM[d] ?? null), C.navy),
+          dataset('Chicken (whole)', labels.map(d => kM[d] ?? null), C.teal),
+          dataset('Ground beef', labels.map(d => bM[d] ?? null), C.red),
+          dataset('Bacon', labels.map(d => baM[d] ?? null), C.orange),
+        ], '$/lb');
+      }
+    });
+  } else {
+    hideEmptyCard('proteinPriceChart');
+  }
 }
 
 function buildInventoryTrade(inventoryTrade) {
@@ -1336,6 +1398,40 @@ function buildInventoryTrade(inventoryTrade) {
   } else {
     hideEmptyCard('exportComparisonChart');
   }
+
+  // Top import cuts/products — US pork imports by product type (US Census,
+  // product weight), stacked million lb per month.
+  const usTrade = inventoryTrade.us_trade_product_weight || {};
+  const importCuts = usTrade.import_by_cut || {};
+  if (importCuts.dates?.length && Object.keys(importCuts.series || {}).length) {
+    const cuts = Object.entries(importCuts.series);
+    registerRangeControl({
+      chartId: 'importCutsChart',
+      options: ['1y', '3y', '5y', 'all'],
+      defaultRange: '5y',
+      renderer(range) {
+        const { start, end } = getRangeSlice(importCuts.dates, range);
+        const labels = importCuts.dates.slice(start, end);
+        const datasets = cuts.map(([cut, values], i) =>
+          dataset(cut, values.slice(start, end), C.seq[i % C.seq.length], { stack: 'cuts' })
+        );
+        renderBarChart('importCutsChart', labels, datasets, 'Million lb', {
+          stacked: true,
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                const v = Number(ctx.parsed.y);
+                if (!Number.isFinite(v)) return ctx.dataset.label || '';
+                return `${ctx.dataset.label}: ${fmtNum(v, 1)}M`;
+              }
+            }
+          }
+        });
+      }
+    });
+  } else {
+    hideEmptyCard('importCutsChart');
+  }
 }
 
 // "Input Cost Price Changes" — ported from the egg chartbook. Lines show each
@@ -1527,6 +1623,43 @@ function initMonthlySignup(data) {
   });
 }
 
+// WASDE forecast bars — production, exports, hog price. Each marketing year is
+// a single bar; the most recent actual (estimate) is grey and the projections
+// are coloured, split into two datasets so the legend reads Estimate / Forecast.
+function buildForecasts(forecasts) {
+  const specs = [
+    { chartId: 'forecastProductionChart', block: forecasts.production, color: C.navy },
+    { chartId: 'forecastExportsChart', block: forecasts.exports, color: C.teal },
+    { chartId: 'forecastPriceChart', block: forecasts.hog_price, color: C.orange },
+  ];
+  specs.forEach(({ chartId, block, color }) => {
+    if (!block || !(block.values || []).some(v => v != null)) {
+      hideEmptyCard(chartId);
+      return;
+    }
+    const years = block.years || [];
+    const kinds = block.kinds || [];
+    const estimate = years.map((_, i) => kinds[i] === 'estimate' ? block.values[i] : null);
+    const forecast = years.map((_, i) => kinds[i] !== 'estimate' ? block.values[i] : null);
+    const unit = block.unit || '';
+    renderBarChart(chartId, years, [
+      dataset('Estimate', estimate, C.slate, { stack: 'wasde' }),
+      dataset('Forecast', forecast, color, { stack: 'wasde' }),
+    ], unit, {
+      stacked: true,
+      tooltip: {
+        callbacks: {
+          label(ctx) {
+            const v = Number(ctx.parsed.y);
+            if (!Number.isFinite(v)) return '';
+            return `${ctx.dataset.label}: ${fmtNum(v, 1)} ${unit}`;
+          }
+        }
+      }
+    });
+  });
+}
+
 async function loadPorkDashboard() {
   try {
     const resp = await fetch('data.json?v=' + Date.now());
@@ -1544,6 +1677,7 @@ async function loadPorkDashboard() {
     buildRetailDemand(data.retail_demand || {});
     buildInventoryTrade(data.inventory_trade || { trade: data.trade || {} });
     buildCostsRisk(data.costs_risk || {});
+    buildForecasts(data.forecasts || {});
     initMonthlySignup(data);
 
     setPorkChartSources();
