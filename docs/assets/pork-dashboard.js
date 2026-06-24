@@ -960,7 +960,7 @@ function buildRetailDemand(retail) {
     const activityMap = Object.fromEntries((activity.dates || []).map((d, i) => [d, activity.values[i]]));
     registerRangeControl({
       chartId: 'retailFeatureChart',
-      options: ['3m', '6m', '1y', '2y', '3y', '5y', 'all'],
+      options: ['6m', '1y', '2y', '5y', 'all'],
       defaultRange: '2y',
       renderer(range) {
         const { start, end } = getRangeSlice(dates, range);
@@ -989,7 +989,7 @@ function buildRetailDemand(retail) {
     const baconMap = Object.fromEntries((bacon.dates || []).map((d, i) => [d, bacon.values[i]]));
     registerRangeControl({
       chartId: 'retailPriceChart',
-      options: ['6m', '1y', '2y', '3y', '5y', 'all'],
+      options: ['1y', '2y', '3y', '5y', '10y', 'all'],
       defaultRange: '3y',
       renderer(range) {
         const { start, end } = getRangeSlice(dates, range);
@@ -1254,28 +1254,40 @@ function buildInventoryTrade(inventoryTrade) {
     hideEmptyCard('brazilDestinationsChart');
   }
 
-  // Monthly export comparison — US pork exports by calendar month, one grouped bar
-  // per year (last N years side by side) to read seasonality and YoY at a glance.
+  // Monthly export comparison — US pork exports by calendar month, one line per year
+  // (last N), with 2026 (yellow) and 2025 (orange) highlighted against gray history.
   if (totals.dates?.length && (totals.export_pork || []).some(v => v != null)) {
     const exportLb = (totals.export_pork || []).map(v => v != null ? v / 1000 : null);
     const ymMap = buildYearMonthMap(totals.dates, exportLb);
-    const N = { '3y': 3, '5y': 5, '7y': 7 };
+    const HILITE = { 2026: C.gold, 2025: C.orange };
+    const YEARS_N = { '5y': 5, '10y': 10, all: 99 };
     registerRangeControl({
       chartId: 'exportComparisonChart',
-      options: ['3y', '5y', '7y'],
-      defaultRange: '5y',
+      options: ['5y', '10y', 'all'],
+      defaultRange: '10y',
       renderer(range) {
-        const years = Object.keys(ymMap).map(Number).sort((a, b) => a - b).slice(-(N[range] || 5));
-        const datasets = years.map((yr, i) => dataset(String(yr), monthsForYear(ymMap, yr), C.seq[i % C.seq.length]));
-        renderBarChart('exportComparisonChart', MON_SHORT, datasets, 'Million lb', {
+        const years = Object.keys(ymMap).map(Number).sort((a, b) => a - b).slice(-(YEARS_N[range] || 10));
+        const grayYears = years.filter(y => !HILITE[y]);
+        const grayLabel = grayYears.length ? `${grayYears[0]} – ${grayYears[grayYears.length - 1]}` : 'Prior years';
+        const ordered = [...grayYears, ...years.filter(y => HILITE[y]).sort((a, b) => a - b)];
+        const datasets = ordered.map(yr => dataset(String(yr), monthsForYear(ymMap, yr), HILITE[yr] || '#c4ccd2', {
+          borderWidth: HILITE[yr] ? 4.2 : 1.4,
+          order: HILITE[yr] ? (yr === 2026 ? 0 : 1) : 10,
+          legendKey: HILITE[yr] ? undefined : 'historical',
+          legendLabel: HILITE[yr] ? undefined : grayLabel
+        }));
+        renderLineChart('exportComparisonChart', MON_SHORT, datasets, 'Million lb', {
           categoryX: true,
           maxTicks: 12,
           tooltip: {
+            itemSort(a, b) {
+              return Number(b.dataset.label) - Number(a.dataset.label);
+            },
             callbacks: {
               label(ctx) {
                 const v = Number(ctx.parsed.y);
-                if (!Number.isFinite(v)) return ctx.dataset.label || '';
-                return `${ctx.dataset.label}: ${fmtNum(v, 1)}M lb`;
+                if (!Number.isFinite(v)) return '';
+                return `${ctx.dataset.label}: ${fmtNum(v, 0)}M lb`;
               }
             }
           }
