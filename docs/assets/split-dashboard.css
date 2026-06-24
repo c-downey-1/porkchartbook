@@ -685,6 +685,13 @@ a{color:inherit}
   margin:-4px 0 14px;
 }
 
+/* Half-width (side-by-side) cards: stack the legend below the range buttons so it
+   never overlaps them, and reserve a consistent subtitle height so paired charts'
+   x-axes line up vertically. */
+.card.half .chart-toolbar{flex-direction:column;align-items:stretch;gap:6px}
+.card.half .chart-legend{justify-content:flex-end}
+.card.half .sub{min-height:2.79rem}
+
 .range-controls{
   display:flex;
   flex-wrap:wrap;

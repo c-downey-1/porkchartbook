@@ -124,6 +124,7 @@ function renderHfBar(chartId, daily, yLabel, range, opts = {}) {
       extra.yMax = Math.ceil(hi + pad);
     }
   }
+  if (opts.yAxisWidth != null) extra.yAxisWidth = opts.yAxisWidth;
   renderBarChart(chartId, out.dates, [dataset(opts.label || '', values, opts.color || C.navy)], yLabel, extra);
 }
 
@@ -562,7 +563,7 @@ function buildSlaughterProduction(sp) {
       defaultRange: HF_DEFAULT,
       renderer(range) {
         renderHfBar('porkProductionChart', dailyProd, 'Million lb', range, {
-          label: 'Estimated production', color: C.navy, scale: 1e6, anchor: true,
+          label: 'Estimated production', color: C.navy, scale: 1e6, anchor: true, yAxisWidth: 94,
           subtitle: b => b === 'weekly'
             ? 'Weekly average of daily estimated production, million lb/day (daily hogs × carcass weight).'
             : 'Daily estimated pork production, million lb (daily hogs × carcass weight).'
@@ -603,7 +604,7 @@ function buildNassSlaughter(sp) {
     const fiMap = Object.fromEntries((fi?.dates || []).map((d, i) => [d, fi.values[i]]));
     registerRangeControl({
       chartId: 'commercialSlaughterChart',
-      options: ['1y', '2y', '3y', '5y', '10y', 'all'],
+      options: ['1y', '2y', '5y', '10y', 'all'],
       defaultRange: '5y',
       renderer(range) {
         const { start, end } = getRangeSlice(dates, range);
@@ -650,7 +651,7 @@ function buildNassSlaughter(sp) {
   if (seriesHasData(production)) {
     registerRangeControl({
       chartId: 'commercialProductionChart',
-      options: ['1y', '2y', '3y', '5y', '10y', 'all'],
+      options: ['1y', '2y', '5y', '10y', 'all'],
       defaultRange: '5y',
       renderer(range) {
         const { start, end } = getRangeSlice(production.dates, range);
@@ -658,7 +659,8 @@ function buildNassSlaughter(sp) {
           'commercialProductionChart',
           production.dates.slice(start, end),
           [dataset('Commercial pork production', toMillions(production.values.slice(start, end)), C.navy)],
-          'Million lb'
+          'Million lb',
+          { yAxisWidth: 94 }
         );
       }
     });

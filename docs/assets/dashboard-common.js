@@ -633,6 +633,11 @@ function baseOptions(yLabel, extra = {}) {
   if (extra.yMax != null) options.scales.y.max = extra.yMax;
   if (hasY2 && extra.y2Min != null) options.scales.y2.min = extra.y2Min;
   if (hasY2 && extra.y2Max != null) options.scales.y2.max = extra.y2Max;
+  if (extra.yAxisWidth != null) {
+    // Pin the y-axis (left inset) to a fixed width so side-by-side charts share
+    // the same plot-area left edge regardless of tick-label width.
+    options.scales.y.afterFit = (axis) => { axis.width = extra.yAxisWidth; };
+  }
   return options;
 }
 
