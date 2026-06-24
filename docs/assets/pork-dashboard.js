@@ -2,6 +2,25 @@
 
 const C = DASH_COLORS;
 
+// Shared destination → colour map so the same country reads the same colour across
+// the US and Brazil export-destination charts. Brazil-only countries reuse colours
+// from US-only countries (they never appear in the same chart). Falls back to the
+// sequential palette for anything unlisted.
+const DEST_COLORS = {
+  'Mexico': C.seq[0],
+  'Japan': C.seq[1],
+  'China': C.seq[2],
+  'South Korea': C.seq[3],
+  'Canada': C.seq[4],
+  'Colombia': C.seq[6],
+  'Philippines': C.seq[3],
+  'Chile': C.seq[4],
+  'Hong Kong': C.seq[6],
+};
+function destColor(country, i) {
+  return DEST_COLORS[country] || C.seq[i % C.seq.length];
+}
+
 // Every card is full-width, so a single aspect ratio gives every chart the same
 // height. Wrap the shared renderers to force one ratio, overriding any per-call
 // value, so no chart looks more vertically smushed than its neighbours.
@@ -267,6 +286,7 @@ function setPorkChartSources() {
     exportComparisonChart: `Chart: Innovate Animal Ag • Source: ${ers}`,
     exportShareChart: `Chart: Innovate Animal Ag • Source: ${ers} / ${nass}`,
     brazilDestinationsChart: `Chart: Innovate Animal Ag • Source: ${comex}`,
+    feedPriceChart: `Chart: Innovate Animal Ag • Source: ${fred}`,
     inputCostChart: `Chart: Innovate Animal Ag • Sources: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a> · <a href="https://fred.stlouisfed.org/series/GASDESW" target="_blank" rel="noreferrer">FRED GASDESW</a> · <a href="https://fred.stlouisfed.org/series/APU000072610" target="_blank" rel="noreferrer">FRED APU000072610</a>`,
   };
   Object.entries(srcMap).forEach(([id, html]) => appendCardSource(id, html));
@@ -1091,7 +1111,7 @@ function buildInventoryTrade(inventoryTrade) {
         const { start, end } = getRangeSlice(exports.dates, range);
         const labels = exports.dates.slice(start, end);
         const datasets = countries.map(([country, values], i) =>
-          dataset(country, values.slice(start, end).map(v => v != null ? v / 1000 : null), C.seq[i % C.seq.length], { stack: 'exports' })
+          dataset(country, values.slice(start, end).map(v => v != null ? v / 1000 : null), destColor(country, i), { stack: 'exports' })
         );
         // "Other" = total pork exports minus the named destinations, so the stack reaches the monthly total.
         const otherData = labels.map((d, idx) => {
@@ -1128,33 +1148,50 @@ function buildInventoryTrade(inventoryTrade) {
     hideEmptyCard('exportDestinationsChart');
   }
 
-  // US pork imports by source — mirrors the export-destinations chart. "Other" =
-  // total pork imports minus the named sources, so the stack reaches the total.
+  // US pork imports by source — monthly data aggregated into calendar quarters
+  // (sum). "Other" = total pork imports minus named sources, so the stack totals.
   const importSources = trade.imports_by_source || {};
   if (importSources.dates?.length && Object.keys(importSources.series || {}).length) {
     const sources = Object.entries(importSources.series);
-    const importTotalMap = {};
-    (totals.dates || []).forEach((d, i) => {
+    const qRep = m => `${m.slice(0, 4)}-${String(Math.ceil(Number(m.slice(5, 7)) / 3) * 3).padStart(2, '0')}`;
+    const qMonthCount = {};
+    importSources.dates.forEach(m => { const q = qRep(m); qMonthCount[q] = (qMonthCount[q] || 0) + 1; });
+    const quarterDates = [...new Set(importSources.dates.map(qRep))].sort();
+    // Drop a trailing partial quarter (<3 months) so the last bar isn't undercounted.
+    if (quarterDates.length && qMonthCount[quarterDates[quarterDates.length - 1]] < 3) quarterDates.pop();
+    const qIndex = Object.fromEntries(quarterDates.map((q, i) => [q, i]));
+    const qSeries = {};
+    sources.forEach(([country, values]) => {
+      const arr = quarterDates.map(() => null);
+      importSources.dates.forEach((m, i) => {
+        const v = values[i];
+        if (v == null) return;
+        const qi = qIndex[qRep(m)];
+        if (qi != null) arr[qi] = (arr[qi] || 0) + v / 1000;
+      });
+      qSeries[country] = arr;
+    });
+    const qTotal = quarterDates.map(() => null);
+    (totals.dates || []).forEach((m, i) => {
       const v = (totals.import_pork || [])[i];
-      if (v != null) importTotalMap[d] = v / 1000;
+      if (v == null) return;
+      const qi = qIndex[qRep(m)];
+      if (qi != null) qTotal[qi] = (qTotal[qi] || 0) + v / 1000;
     });
     registerRangeControl({
       chartId: 'importSourcesChart',
       options: ['1y', '3y', '5y', '10y', 'all'],
       defaultRange: '5y',
       renderer(range) {
-        const { start, end } = getRangeSlice(importSources.dates, range);
-        const labels = importSources.dates.slice(start, end);
-        const datasets = sources.map(([country, values], i) =>
-          dataset(country, values.slice(start, end).map(v => v != null ? v / 1000 : null), C.seq[i % C.seq.length], { stack: 'imports' })
+        const { start, end } = quarterRangeSlice(quarterDates, range);
+        const labels = quarterLabels(quarterDates.slice(start, end));
+        const datasets = sources.map(([country], i) =>
+          dataset(country, qSeries[country].slice(start, end), C.seq[i % C.seq.length], { stack: 'imports' })
         );
-        const otherData = labels.map((d, idx) => {
-          const total = importTotalMap[d];
+        const otherData = quarterDates.slice(start, end).map((q, idx) => {
+          const total = qTotal[start + idx];
           if (total == null) return null;
-          const named = sources.reduce((sum, [, values]) => {
-            const v = values[start + idx];
-            return sum + (v != null ? v / 1000 : 0);
-          }, 0);
+          const named = sources.reduce((sum, [country]) => sum + (qSeries[country][start + idx] || 0), 0);
           return Math.max(0, total - named);
         });
         if (otherData.some(v => v != null)) {
@@ -1162,6 +1199,7 @@ function buildInventoryTrade(inventoryTrade) {
         }
         renderBarChart('importSourcesChart', labels, datasets, 'Million lb', {
           stacked: true,
+          categoryX: true,
           tooltip: {
             callbacks: {
               label(ctx) {
@@ -1218,7 +1256,7 @@ function buildInventoryTrade(inventoryTrade) {
         const { start, end } = getRangeSlice(brazilDest.dates, range);
         const labels = brazilDest.dates.slice(start, end);
         const datasets = countries.map(([country, values], i) =>
-          dataset(country, values.slice(start, end), C.seq[i % C.seq.length], { stack: 'brazil' })
+          dataset(country, values.slice(start, end), destColor(country, i), { stack: 'brazil' })
         );
         const otherData = labels.map((d, idx) => {
           const total = brazilExportMap[d];
@@ -1449,6 +1487,29 @@ function buildInputCostChart(inputIdx) {
 
 function buildCostsRisk(costs) {
   buildInputCostChart(costs.input_indices || {});
+
+  // Cost of soybean meal and corn — global monthly prices, USD per metric ton.
+  const corn = costs.corn_price, soy = costs.soybean_meal_price;
+  if (seriesHasData(corn) || seriesHasData(soy)) {
+    const dates = [...new Set([...(corn?.dates || []), ...(soy?.dates || [])])].sort();
+    const cMap = Object.fromEntries((corn?.dates || []).map((d, i) => [d, corn.values[i]]));
+    const sMap = Object.fromEntries((soy?.dates || []).map((d, i) => [d, soy.values[i]]));
+    registerRangeControl({
+      chartId: 'feedPriceChart',
+      options: ['1y', '2y', '5y', '10y', 'all'],
+      defaultRange: '5y',
+      renderer(range) {
+        const { start, end } = getRangeSlice(dates, range);
+        const labels = dates.slice(start, end);
+        renderLineChart('feedPriceChart', labels, [
+          dataset('Corn', labels.map(d => cMap[d] != null ? cMap[d] : null), C.gold),
+          dataset('Soybean meal', labels.map(d => sMap[d] != null ? sMap[d] : null), C.teal),
+        ], '$/metric ton');
+      }
+    });
+  } else {
+    hideEmptyCard('feedPriceChart');
+  }
 }
 
 function initMonthlySignup(data) {

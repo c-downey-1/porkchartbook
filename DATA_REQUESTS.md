@@ -73,6 +73,19 @@ Status key: 🔴 not started · 🟡 in progress · 🟢 delivered
   country only).
 - **Source:** USDA ERS / U.S. Census trade data by HS product code for pork.
 
+## 9. Brazil exports to South Korea, Canada, Colombia  🔴
+- **Chart:** Brazil Top Export Destinations (`brazilDestinationsChart`)
+- **Need:** Surface Brazil's pork exports to **South Korea, Canada, Colombia** (so the
+  Brazil chart can show the same destinations the US chart does, for comparison).
+- **Why missing:** `build_brazil_exports(top_n=6)` keeps only Brazil's top-6 destinations
+  by volume (Philippines, Japan, Chile, China, Hong Kong, Mexico); these three fall below
+  that. They may have little/no Brazil volume.
+- **Action:** In `build_brazil_exports`, force-include South Korea/Canada/Colombia in
+  addition to the top-6 (only emit if they have data). Add Portuguese→English mappings in
+  `BRAZIL_COUNTRY_EN` if missing (`Coreia do Sul`✓, check `Canadá`→Canada, `Colômbia`→Colombia).
+  Then regenerate. **Also note:** the palette `C.seq` has only 7 colours — if the Brazil
+  chart ends up with >7 destinations, extend the palette so each country stays distinct.
+
 ---
 
 ## NOT data requests — buildable now from existing `data.json` (no colleague needed)

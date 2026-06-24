@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/split-dashboard.css?v=20260623q">
+<link rel="stylesheet" href="assets/split-dashboard.css?v=20260623u">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <!-- Microsoft Clarity - activate on launch
 <script type="text/javascript">
@@ -167,7 +167,7 @@
             <canvas id="exportComparisonChart"></canvas>
           </article>
           <article class="card wide" id="exportDestinationsWrap">
-            <h3>Top Export Destinations</h3>
+            <h3>US Top Export Destinations</h3>
             <div class="sub">Million lb per month, stacked by destination with an Other category totaling all pork exports.</div>
             <canvas id="exportDestinationsChart"></canvas>
           </article>
@@ -182,8 +182,8 @@
             <canvas id="brazilDestinationsChart"></canvas>
           </article>
           <article class="card half" id="importSourcesWrap">
-            <h3>Top Import Sources</h3>
-            <div class="sub">Million lb per month, stacked by source with an Other category totaling all US pork imports.</div>
+            <h3>US Top Import Sources</h3>
+            <div class="sub">Million lb per quarter, stacked by source with an Other category totaling all US pork imports.</div>
             <canvas id="importSourcesChart"></canvas>
           </article>
           <article class="card half placeholder">
@@ -207,8 +207,10 @@
             <div class="sub">% change in price of common pork input costs from a chosen index date.</div>
             <canvas id="inputCostChart"></canvas>
           </article>
-          <article class="card wide placeholder">
-            <h3>Cost of Soybean Meal and Corn <span class="planned-tag">Planned</span></h3>
+          <article class="card wide" id="feedPriceWrap">
+            <h3>Cost of Soybean Meal and Corn</h3>
+            <div class="sub">Global corn and soybean-meal prices, USD per metric ton, monthly (FRED).</div>
+            <canvas id="feedPriceChart"></canvas>
           </article>
           <article class="card wide" id="hogPriceWrap">
             <h3>Barrow &amp; Gilt Prices</h3>
@@ -251,12 +253,20 @@
           <p>Key takeaways from the latest data, refreshed monthly, plus chartbook signup.</p>
         </div></div>
         <div class="grid">
-          <article class="card wide placeholder">
-            <h3>Monthly Key Insights <span class="planned-tag">Planned</span></h3>
+          <article class="card wide" id="monthlyInsightsWrap">
+            <h3>Monthly Key Insights</h3>
+            <div class="sub">Highlights from the latest public data, refreshed monthly.</div>
+            <ul class="insights-list">
+              <li>The US breeding herd has eased to ~5.89M head, down from ~6.02M two years ago — a slow, productivity-driven contraction rather than a culling spike. <a href="#herdBreedingMarketWrap">View chart →</a></li>
+              <li>Pigs saved per litter has climbed to ~12.0, up from ~11.7 a year ago — more pigs from fewer sows is keeping output steady as the herd shrinks. <a href="#farrowComboTestWrap">View chart →</a></li>
+              <li>The packer spread (cutout less net hog price) has compressed to just a few dollars per cwt recently — unusually thin processing margins. <a href="#spreadMergeTestWrap">View chart →</a></li>
+              <li>Exports now absorb ~26% of US pork production, with 2025 monthly volumes running above the prior-decade range. <a href="#exportShareWrap">View chart →</a></li>
+              <li>Frozen pork stocks sit near 436M lb, ~4% below a year ago — leaner cold storage points to firm demand absorbing supply. <a href="#coldStorageWrap">View chart →</a></li>
+            </ul>
           </article>
-          <article class="card wide">
+          <article class="card wide signup-card" id="signupWrap">
             <h3>Get the Pork Chartbook</h3>
-            <div class="sub">Monthly public-data refresh for pork industry executives.</div>
+            <div class="sub">Monthly insights on the Pork Industry digested in your inbox.</div>
             <form class="dashboard-signup-form" id="dashboardSignupForm">
               <div class="dashboard-signup-row">
                 <label class="dashboard-signup-field">
@@ -278,7 +288,7 @@
                   <input type="text" name="role">
                 </label>
               </div>
-              <button class="dashboard-signup-button" type="submit">Request monthly updates</button>
+              <button class="dashboard-signup-button" type="submit">Subscribe</button>
               <div class="dashboard-signup-status" id="dashboardSignupStatus" aria-live="polite"></div>
             </form>
           </article>
@@ -289,7 +299,7 @@
     </main>
   </div>
 </div>
-<script src="assets/dashboard-common.js?v=20260623q"></script>
-<script src="assets/pork-dashboard.js?v=20260623q"></script>
+<script src="assets/dashboard-common.js?v=20260623u"></script>
+<script src="assets/pork-dashboard.js?v=20260623u"></script>
 </body>
 </html>
