@@ -287,7 +287,7 @@ function setPorkChartSources() {
     exportComparisonChart: `Chart: Innovate Animal Ag • Source: ${ers}`,
     exportShareChart: `Chart: Innovate Animal Ag • Source: ${ers} / ${nass}`,
     brazilDestinationsChart: `Chart: Innovate Animal Ag • Source: ${comex}`,
-    feedPriceChart: `Chart: Innovate Animal Ag • Source: ${fred}`,
+    feedPriceChart: `Chart: Innovate Animal Ag • Source: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a>`,
     inputCostChart: `Chart: Innovate Animal Ag • Sources: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a> · <a href="https://fred.stlouisfed.org/series/GASDESW" target="_blank" rel="noreferrer">FRED GASDESW</a> · <a href="https://fred.stlouisfed.org/series/APU000072610" target="_blank" rel="noreferrer">FRED APU000072610</a>`,
   };
   Object.entries(srcMap).forEach(([id, html]) => appendCardSource(id, html));
@@ -1489,8 +1489,9 @@ function buildInputCostChart(inputIdx) {
 function buildCostsRisk(costs) {
   buildInputCostChart(costs.input_indices || {});
 
-  // Cost of soybean meal and corn — global monthly prices, USD per metric ton.
+  // Cost of soybean meal and corn — daily CME prices ($/ton) from the feed sheet.
   const corn = costs.corn_price, soy = costs.soybean_meal_price;
+  const feedUnit = costs.corn_soy_price_unit || '$/ton';
   if (seriesHasData(corn) || seriesHasData(soy)) {
     const dates = [...new Set([...(corn?.dates || []), ...(soy?.dates || [])])].sort();
     const cMap = Object.fromEntries((corn?.dates || []).map((d, i) => [d, corn.values[i]]));
@@ -1505,7 +1506,7 @@ function buildCostsRisk(costs) {
         renderLineChart('feedPriceChart', labels, [
           dataset('Corn', labels.map(d => cMap[d] != null ? cMap[d] : null), C.gold),
           dataset('Soybean meal', labels.map(d => sMap[d] != null ? sMap[d] : null), C.teal),
-        ], '$/metric ton');
+        ], feedUnit);
       }
     });
   } else {

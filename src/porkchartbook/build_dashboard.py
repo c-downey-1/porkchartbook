@@ -1038,13 +1038,14 @@ def _fred_by_date(conn, series_id):
     return {d: v for d, v in rows if d}
 
 
-def build_input_indices(conn, base_month="2025-01"):
+def build_input_indices(conn, base_month="2025-01", feed=None):
     """Common pork input costs, each rebased to base_month = 100, on a shared
     daily date axis. Corn & soybean meal are daily (from the CME feed sheet);
     diesel is weekly and electricity monthly at their native FRED cadence.
     Mirrors the egg chartbook chart but with corn/soy split out, daily, and
-    paperboard packaging removed."""
-    corn_by_date, soy_by_date = _fetch_feed_sheet_daily()
+    paperboard packaging removed. ``feed`` lets the caller pass an already-fetched
+    (corn_by_date, soy_by_date) pair to avoid re-downloading the sheet."""
+    corn_by_date, soy_by_date = feed if feed is not None else _fetch_feed_sheet_daily()
     diesel_by_date = _fred_by_date(conn, "GASDESW")
     elec_by_date = _fred_by_date(conn, "APU000072610")
 
@@ -1115,11 +1116,25 @@ def build_costs_risk(conn, prices):
     )
     monthly_spread = _subtract_series(monthly_cutout, monthly_net)
 
+    # Headline corn & soybean-meal price chart: use the daily CME $/ton series from
+    # the shared feed sheet (fresher and US-relevant) rather than the FRED world
+    # monthly $/metric-ton series. Fetch the sheet once and reuse it for the input
+    # cost index below. Fall back to the FRED series if the sheet is unavailable.
+    corn_by_date, soy_by_date = _fetch_feed_sheet_daily()
+
+    def _daily_series(by_date):
+        labels_d = sorted(by_date)
+        return _series(labels_d, [by_date[label] for label in labels_d])
+
+    corn_price = _daily_series(corn_by_date) if corn_by_date else _series(*corn)
+    soybean_meal_price = _daily_series(soy_by_date) if soy_by_date else _series(*soymeal)
+
     return {
-        "corn_price": _series(*corn),
-        "soybean_meal_price": _series(*soymeal),
+        "corn_price": corn_price,
+        "soybean_meal_price": soybean_meal_price,
+        "corn_soy_price_unit": "$/ton" if corn_by_date else "$/metric ton",
         "feed_cost_index": _series(labels, feed_values),
-        "input_indices": build_input_indices(conn),
+        "input_indices": build_input_indices(conn, feed=(corn_by_date, soy_by_date)),
         "monthly_cutout_net_spread": _series(*monthly_spread),
         "risk_watch": [
             {
