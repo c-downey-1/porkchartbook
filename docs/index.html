@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/split-dashboard.css?v=20260624a">
+<link rel="stylesheet" href="assets/split-dashboard.css?v=20260625f">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <!-- Microsoft Clarity - activate on launch
 <script type="text/javascript">
@@ -136,21 +136,13 @@
         <div class="grid">
           <article class="card wide" id="perCapitaWrap">
             <h3>Per Capita Consumption &amp; Disappearance</h3>
-            <div class="sub">Per-capita pork availability (boneless, lb/person/yr, left axis) and total US domestic disappearance (million lb, right axis). USDA ERS Food Availability, annual.</div>
+            <div class="sub">Per-capita consumption (navy, left axis): lb of pork available per person per year (boneless basis).<br>Domestic disappearance (yellow, right axis): total US pork consumed at home — production + imports − exports − ending stocks, million lb. USDA ERS Food Availability, annual.</div>
             <canvas id="perCapitaChart"></canvas>
-          </article>
-          <article class="card wide placeholder">
-            <h3>Retail &amp; Foodservice / Restaurant Demand <span class="planned-tag">Planned</span></h3>
           </article>
           <article class="card wide" id="retailFeatureWrap">
             <h3>Retail Feature Activity</h3>
             <div class="sub">Feature rate (left axis): the share of surveyed stores running a pork ad.<br>Activity index (right axis): a composite of the overall intensity of pork advertising (breadth + how many items/ads).</div>
             <canvas id="retailFeatureChart"></canvas>
-          </article>
-          <article class="card wide" id="proteinPriceWrap">
-            <h3>Demand vs. Chicken and Beef</h3>
-            <div class="sub">Average US retail price, $/lb (BLS CPI via FRED) — pork chops vs. whole chicken vs. ground beef, with bacon for reference.</div>
-            <canvas id="proteinPriceChart"></canvas>
           </article>
         </div>
       </section>
@@ -172,19 +164,19 @@
             <div class="sub">Million lb, US pork exports by month — a line per year (last 10), with 2026 (yellow) and 2025 (orange) highlighted against prior years.</div>
             <canvas id="exportComparisonChart"></canvas>
           </article>
-          <article class="card wide" id="exportDestinationsWrap">
-            <h3>US Top Export Destinations</h3>
-            <div class="sub">Million lb per month, stacked by destination with an Other category totaling all pork exports.</div>
-            <canvas id="exportDestinationsChart"></canvas>
-          </article>
           <article class="card wide" id="tradeFlowWrap">
             <h3>Pork Exports: US vs. Brazil</h3>
-            <div class="sub">Million lb per month. US exports are ERS carcass weight; Brazil exports (Comex Stat) are product weight, so treat the comparison as directional.</div>
+            <div class="sub">Million lb per quarter, fresh/frozen pork (HS 0203), product weight — US (US Census) vs. Brazil (Comex Stat), now on a comparable basis.</div>
             <canvas id="tradeFlowChart"></canvas>
           </article>
-          <article class="card wide" id="brazilDestinationsWrap">
+          <article class="card half" id="exportDestinationsWrap">
+            <h3>US Top Export Destinations</h3>
+            <div class="sub">Million lb per quarter, stacked by destination; Other = all remaining US pork exports.</div>
+            <canvas id="exportDestinationsChart"></canvas>
+          </article>
+          <article class="card half" id="brazilDestinationsWrap">
             <h3>Brazil Top Export Destinations</h3>
-            <div class="sub">Million lb per month, stacked by destination with an Other category totaling all Brazil fresh/frozen pork exports.</div>
+            <div class="sub">Million lb per quarter, stacked by destination; Other = all remaining Brazil pork exports.</div>
             <canvas id="brazilDestinationsChart"></canvas>
           </article>
           <article class="card half" id="importSourcesWrap">
@@ -193,8 +185,8 @@
             <canvas id="importSourcesChart"></canvas>
           </article>
           <article class="card half" id="importCutsWrap">
-            <h3>Top Import Cuts / Products</h3>
-            <div class="sub">Million lb per month, US pork imports by product type, stacked (US Census, product weight, by HS code).</div>
+            <h3>US Top Import Cuts</h3>
+            <div class="sub">Million lb per quarter, stacked by product type (US Census, product weight).</div>
             <canvas id="importCutsChart"></canvas>
           </article>
           <article class="card wide" id="forecastExportsWrap">
@@ -311,7 +303,7 @@
     </main>
   </div>
 </div>
-<script src="assets/dashboard-common.js?v=20260624a"></script>
-<script src="assets/pork-dashboard.js?v=20260624a"></script>
+<script src="assets/dashboard-common.js?v=20260625f"></script>
+<script src="assets/pork-dashboard.js?v=20260625f"></script>
 </body>
 </html>

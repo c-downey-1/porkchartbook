@@ -295,7 +295,6 @@ function setPorkChartSources() {
     forecastExportsChart: `Chart: Innovate Animal Ag • Source: ${wasde}`,
     forecastPriceChart: `Chart: Innovate Animal Ag • Source: ${wasde}`,
     perCapitaChart: `Chart: Innovate Animal Ag • Source: ${ersFood}`,
-    proteinPriceChart: `Chart: Innovate Animal Ag • Source: ${fred}`,
     importCutsChart: `Chart: Innovate Animal Ag • Source: ${census}`,
     inputCostChart: `Chart: Innovate Animal Ag • Sources: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a> · <a href="https://fred.stlouisfed.org/series/GASDESW" target="_blank" rel="noreferrer">FRED GASDESW</a> · <a href="https://fred.stlouisfed.org/series/APU000072610" target="_blank" rel="noreferrer">FRED APU000072610</a>`,
   };
@@ -1045,52 +1044,33 @@ function buildRetailDemand(retail) {
   const boneless = (pcd.per_capita || {}).boneless;
   const disappearance = pcd.domestic_disappearance;
   if (seriesHasData(boneless) || seriesHasData(disappearance)) {
-    const dates = [...new Set([...(boneless?.dates || []), ...(disappearance?.dates || [])])]
-      .filter(d => d >= '1980').sort();
+    const allDates = [...new Set([...(boneless?.dates || []), ...(disappearance?.dates || [])])]
+      .filter(d => d >= '1986').sort();
     const bMap = Object.fromEntries((boneless?.dates || []).map((d, i) => [d, boneless.values[i]]));
     const dMap = Object.fromEntries((disappearance?.dates || []).map((d, i) => [d, disappearance.values[i]]));
-    renderLineChart(
-      'perCapitaChart',
-      dates,
-      [
-        dataset('Per-capita (boneless)', dates.map(d => bMap[d] ?? null), C.navy),
-        dataset('Domestic disappearance', dates.map(d => dMap[d] ?? null), C.gold, { yAxisID: 'y2' }),
-      ],
-      'lb / person / yr',
-      { y2: 'Million lb' }
-    );
+    const N = { '5y': 5, '10y': 10, all: 9999 };
+    registerRangeControl({
+      chartId: 'perCapitaChart',
+      options: ['5y', '10y', 'all'],
+      defaultRange: '10y',
+      renderer(range) {
+        const dates = allDates.slice(-(N[range] || 10));
+        renderLineChart(
+          'perCapitaChart',
+          dates,
+          [
+            dataset('Per-capita consumption', dates.map(d => bMap[d] ?? null), C.navy),
+            dataset('Domestic disappearance', dates.map(d => dMap[d] ?? null), C.gold, { yAxisID: 'y2' }),
+          ],
+          'lb / person / yr',
+          { y2: 'Million lb', categoryX: true, maxTicks: 12 }
+        );
+      }
+    });
   } else {
     hideEmptyCard('perCapitaChart');
   }
 
-  // Pork vs. competing proteins — retail $/lb (BLS CPI via FRED).
-  const chops = retail.fred_pork_chops_price;
-  const chicken = retail.fred_chicken_price;
-  const beef = retail.fred_beef_price;
-  const baconRef = retail.fred_bacon_price;
-  if ([chops, chicken, beef].some(seriesHasData)) {
-    const all = [chops, chicken, beef, baconRef];
-    const dates = [...new Set(all.flatMap(s => s?.dates || []))].sort();
-    const mk = s => Object.fromEntries((s?.dates || []).map((d, i) => [d, s.values[i]]));
-    const cM = mk(chops), kM = mk(chicken), bM = mk(beef), baM = mk(baconRef);
-    registerRangeControl({
-      chartId: 'proteinPriceChart',
-      options: ['1y', '2y', '3y', '5y', '10y', 'all'],
-      defaultRange: '5y',
-      renderer(range) {
-        const { start, end } = getRangeSlice(dates, range);
-        const labels = dates.slice(start, end);
-        renderLineChart('proteinPriceChart', labels, [
-          dataset('Pork chops', labels.map(d => cM[d] ?? null), C.navy),
-          dataset('Chicken (whole)', labels.map(d => kM[d] ?? null), C.teal),
-          dataset('Ground beef', labels.map(d => bM[d] ?? null), C.red),
-          dataset('Bacon', labels.map(d => baM[d] ?? null), C.orange),
-        ], '$/lb');
-      }
-    });
-  } else {
-    hideEmptyCard('proteinPriceChart');
-  }
 }
 
 function buildInventoryTrade(inventoryTrade) {
@@ -1134,23 +1114,47 @@ function buildInventoryTrade(inventoryTrade) {
     const v = brazilTotal.values[i];
     if (v != null) brazilExportMap[d] = v;
   });
-  if (totals.dates?.length) {
+  // US exports in product weight (US Census, HS 0203 fresh/frozen) — now on the
+  // same basis as Brazil's fresh/frozen (Comex Stat), so the two are comparable.
+  const usPw = (inventoryTrade.us_trade_product_weight || {}).export_fresh_frozen || {};
+  if (usPw.dates?.length) {
+    // Aggregate both series monthly → calendar quarters (sum) for a smoother read.
+    const qRep = m => `${m.slice(0, 4)}-${String(Math.ceil(Number(m.slice(5, 7)) / 3) * 3).padStart(2, '0')}`;
+    const usMonthMap = Object.fromEntries(usPw.dates.map((d, i) => [d, usPw.values[i]]));
+    const monthlyDates = [...new Set([...(usPw.dates || []), ...(brazilTotal.dates || [])])].sort();
+    const qMonthCount = {};
+    monthlyDates.forEach(m => { const q = qRep(m); qMonthCount[q] = (qMonthCount[q] || 0) + 1; });
+    const quarterDates = [...new Set(monthlyDates.map(qRep))].sort();
+    if (quarterDates.length && qMonthCount[quarterDates[quarterDates.length - 1]] < 3) quarterDates.pop();
+    const qIndex = Object.fromEntries(quarterDates.map((q, i) => [q, i]));
+    const aggregate = monthMap => {
+      const arr = quarterDates.map(() => null);
+      Object.keys(monthMap).forEach(m => {
+        const v = monthMap[m];
+        if (v == null) return;
+        const qi = qIndex[qRep(m)];
+        if (qi != null) arr[qi] = (arr[qi] || 0) + v;
+      });
+      return arr;
+    };
+    const usQ = aggregate(usMonthMap);
+    const bzQ = aggregate(brazilExportMap);
     registerRangeControl({
       chartId: 'tradeFlowChart',
       options: ['3y', '5y', '10y', 'all'],
       defaultRange: '5y',
       renderer(range) {
-        const { start, end } = getRangeSlice(totals.dates, range);
-        const labels = totals.dates.slice(start, end);
+        const { start, end } = quarterRangeSlice(quarterDates, range);
+        const labels = quarterLabels(quarterDates.slice(start, end));
         renderLineChart(
           'tradeFlowChart',
           labels,
           [
-            dataset('US Pork Exports (carcass weight)', (totals.export_pork || []).slice(start, end).map(v => v != null ? v / 1000 : null), C.teal),
-            dataset('Brazil Exports (Product weight)', labels.map(d => brazilExportMap[d] ?? null), C.navy),
+            dataset('US pork exports', usQ.slice(start, end), C.teal),
+            dataset('Brazil pork exports', bzQ.slice(start, end), C.navy),
           ],
           'Million lb',
-          { aspect: 2.6 }
+          { aspect: 2.6, categoryX: true }
         );
       }
     });
@@ -1161,29 +1165,35 @@ function buildInventoryTrade(inventoryTrade) {
   const exports = trade.exports_by_destination || {};
   if (exports.dates?.length && Object.keys(exports.series || {}).length) {
     const countries = Object.entries(exports.series);
-    const exportTotalMap = {};
-    (totals.dates || []).forEach((d, i) => {
-      const v = (totals.export_pork || [])[i];
-      if (v != null) exportTotalMap[d] = v / 1000;
+    // Aggregate monthly → calendar quarters (sum), scaled to million lb.
+    const qRep = m => `${m.slice(0, 4)}-${String(Math.ceil(Number(m.slice(5, 7)) / 3) * 3).padStart(2, '0')}`;
+    const qMonthCount = {};
+    exports.dates.forEach(m => { const q = qRep(m); qMonthCount[q] = (qMonthCount[q] || 0) + 1; });
+    const quarterDates = [...new Set(exports.dates.map(qRep))].sort();
+    if (quarterDates.length && qMonthCount[quarterDates[quarterDates.length - 1]] < 3) quarterDates.pop();
+    const qIndex = Object.fromEntries(quarterDates.map((q, i) => [q, i]));
+    const qCountries = countries.map(([country, values]) => {
+      const arr = quarterDates.map(() => null);
+      exports.dates.forEach((m, i) => { const v = values[i]; if (v == null) return; const qi = qIndex[qRep(m)]; if (qi != null) arr[qi] = (arr[qi] || 0) + v / 1000; });
+      return [country, arr];
     });
+    const qTotal = quarterDates.map(() => null);
+    (totals.dates || []).forEach((m, i) => { const v = (totals.export_pork || [])[i]; if (v == null) return; const qi = qIndex[qRep(m)]; if (qi != null) qTotal[qi] = (qTotal[qi] || 0) + v / 1000; });
     registerRangeControl({
       chartId: 'exportDestinationsChart',
-      options: ['1y', '3y', '5y', '10y', 'all'],
+      options: ['5y', '10y', 'all'],
       defaultRange: '5y',
       renderer(range) {
-        const { start, end } = getRangeSlice(exports.dates, range);
-        const labels = exports.dates.slice(start, end);
-        const datasets = countries.map(([country, values], i) =>
-          dataset(country, values.slice(start, end).map(v => v != null ? v / 1000 : null), destColor(country, i), { stack: 'exports' })
+        const { start, end } = quarterRangeSlice(quarterDates, range);
+        const labels = quarterLabels(quarterDates.slice(start, end));
+        const datasets = qCountries.map(([country, arr], i) =>
+          dataset(country, arr.slice(start, end), destColor(country, i), { stack: 'exports' })
         );
-        // "Other" = total pork exports minus the named destinations, so the stack reaches the monthly total.
-        const otherData = labels.map((d, idx) => {
-          const total = exportTotalMap[d];
+        // "Other" = total pork exports minus the named destinations, so the stack reaches the quarter total.
+        const otherData = quarterDates.slice(start, end).map((q, idx) => {
+          const total = qTotal[start + idx];
           if (total == null) return null;
-          const named = countries.reduce((sum, [, values]) => {
-            const v = values[start + idx];
-            return sum + (v != null ? v / 1000 : 0);
-          }, 0);
+          const named = qCountries.reduce((sum, [, arr]) => sum + (arr[start + idx] || 0), 0);
           return Math.max(0, total - named);
         });
         if (otherData.some(v => v != null)) {
@@ -1191,6 +1201,8 @@ function buildInventoryTrade(inventoryTrade) {
         }
         renderBarChart('exportDestinationsChart', labels, datasets, 'Million lb', {
           stacked: true,
+          categoryX: true,
+          yAxisWidth: 94,
           tooltip: {
             callbacks: {
               label(ctx) {
@@ -1311,23 +1323,34 @@ function buildInventoryTrade(inventoryTrade) {
   const brazilDest = brazil.by_destination || {};
   if (brazilDest.dates?.length && Object.keys(brazilDest.series || {}).length) {
     const countries = Object.entries(brazilDest.series);
+    // Aggregate monthly → calendar quarters (sum); values already in million lb.
+    const qRep = m => `${m.slice(0, 4)}-${String(Math.ceil(Number(m.slice(5, 7)) / 3) * 3).padStart(2, '0')}`;
+    const qMonthCount = {};
+    brazilDest.dates.forEach(m => { const q = qRep(m); qMonthCount[q] = (qMonthCount[q] || 0) + 1; });
+    const quarterDates = [...new Set(brazilDest.dates.map(qRep))].sort();
+    if (quarterDates.length && qMonthCount[quarterDates[quarterDates.length - 1]] < 3) quarterDates.pop();
+    const qIndex = Object.fromEntries(quarterDates.map((q, i) => [q, i]));
+    const qCountries = countries.map(([country, values]) => {
+      const arr = quarterDates.map(() => null);
+      brazilDest.dates.forEach((m, i) => { const v = values[i]; if (v == null) return; const qi = qIndex[qRep(m)]; if (qi != null) arr[qi] = (arr[qi] || 0) + v; });
+      return [country, arr];
+    });
+    const qTotal = quarterDates.map(() => null);
+    Object.keys(brazilExportMap).forEach(m => { const v = brazilExportMap[m]; if (v == null) return; const qi = qIndex[qRep(m)]; if (qi != null) qTotal[qi] = (qTotal[qi] || 0) + v; });
     registerRangeControl({
       chartId: 'brazilDestinationsChart',
-      options: ['1y', '3y', '5y', '10y', 'all'],
+      options: ['5y', '10y', 'all'],
       defaultRange: '5y',
       renderer(range) {
-        const { start, end } = getRangeSlice(brazilDest.dates, range);
-        const labels = brazilDest.dates.slice(start, end);
-        const datasets = countries.map(([country, values], i) =>
-          dataset(country, values.slice(start, end), destColor(country, i), { stack: 'brazil' })
+        const { start, end } = quarterRangeSlice(quarterDates, range);
+        const labels = quarterLabels(quarterDates.slice(start, end));
+        const datasets = qCountries.map(([country, arr], i) =>
+          dataset(country, arr.slice(start, end), destColor(country, i), { stack: 'brazil' })
         );
-        const otherData = labels.map((d, idx) => {
-          const total = brazilExportMap[d];
+        const otherData = quarterDates.slice(start, end).map((q, idx) => {
+          const total = qTotal[start + idx];
           if (total == null) return null;
-          const named = countries.reduce((sum, [, values]) => {
-            const v = values[start + idx];
-            return sum + (v != null ? v : 0);
-          }, 0);
+          const named = qCountries.reduce((sum, [, arr]) => sum + (arr[start + idx] || 0), 0);
           return Math.max(0, total - named);
         });
         if (otherData.some(v => v != null)) {
@@ -1335,6 +1358,8 @@ function buildInventoryTrade(inventoryTrade) {
         }
         renderBarChart('brazilDestinationsChart', labels, datasets, 'Million lb', {
           stacked: true,
+          categoryX: true,
+          yAxisWidth: 94,
           tooltip: {
             callbacks: {
               label(ctx) {
@@ -1405,24 +1430,46 @@ function buildInventoryTrade(inventoryTrade) {
   const importCuts = usTrade.import_by_cut || {};
   if (importCuts.dates?.length && Object.keys(importCuts.series || {}).length) {
     const cuts = Object.entries(importCuts.series);
+    // Aggregate monthly → calendar quarters (sum) so it lines up with US Top Import Sources.
+    const qRep = m => `${m.slice(0, 4)}-${String(Math.ceil(Number(m.slice(5, 7)) / 3) * 3).padStart(2, '0')}`;
+    const qMonthCount = {};
+    importCuts.dates.forEach(m => { const q = qRep(m); qMonthCount[q] = (qMonthCount[q] || 0) + 1; });
+    const quarterDates = [...new Set(importCuts.dates.map(qRep))].sort();
+    if (quarterDates.length && qMonthCount[quarterDates[quarterDates.length - 1]] < 3) quarterDates.pop();
+    const qIndex = Object.fromEntries(quarterDates.map((q, i) => [q, i]));
+    const qCuts = cuts.map(([cut, values]) => {
+      const arr = quarterDates.map(() => null);
+      importCuts.dates.forEach((m, i) => {
+        const v = values[i];
+        if (v == null) return;
+        const qi = qIndex[qRep(m)];
+        if (qi != null) arr[qi] = (arr[qi] || 0) + v;
+      });
+      return [cut, arr];
+    });
     registerRangeControl({
       chartId: 'importCutsChart',
-      options: ['1y', '3y', '5y', 'all'],
+      options: ['1y', '3y', '5y', '10y', 'all'],
       defaultRange: '5y',
       renderer(range) {
-        const { start, end } = getRangeSlice(importCuts.dates, range);
-        const labels = importCuts.dates.slice(start, end);
-        const datasets = cuts.map(([cut, values], i) =>
-          dataset(cut, values.slice(start, end), C.seq[i % C.seq.length], { stack: 'cuts' })
+        const { start, end } = quarterRangeSlice(quarterDates, range);
+        const labels = quarterLabels(quarterDates.slice(start, end));
+        const datasets = qCuts.map(([cut, arr], i) =>
+          dataset(cut.replace(/\s*\(HS[^)]*\)/i, ''), arr.slice(start, end), C.seq[i % C.seq.length], { stack: 'cuts' })
         );
         renderBarChart('importCutsChart', labels, datasets, 'Million lb', {
           stacked: true,
+          categoryX: true,
           tooltip: {
             callbacks: {
               label(ctx) {
                 const v = Number(ctx.parsed.y);
                 if (!Number.isFinite(v)) return ctx.dataset.label || '';
                 return `${ctx.dataset.label}: ${fmtNum(v, 1)}M`;
+              },
+              footer(items) {
+                const total = items.reduce((sum, it) => sum + (Number(it.parsed.y) || 0), 0);
+                return `Total: ${fmtNum(total, 1)}M lb`;
               }
             }
           }

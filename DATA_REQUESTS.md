@@ -31,6 +31,27 @@ Status key: 🔴 not started · 🟡 in progress · 🟢 delivered
 
 ---
 
+## Round 2 — follow-up requests (2026-06-25)
+
+### 10. Quarterly forecasts (production / exports / hog price)  🔴
+- **Charts:** Forecast Production / Forecasted Exports / Forecasted Price.
+- **Problem:** WASDE was delivered **annual only** — `forecasts.production/exports/hog_price`
+  each have just `years` (2025–2027), so the charts show only 2–3 points.
+- **Need:** Quarterly granularity. WASDE's balance-sheet tables include **quarterly**
+  commercial pork production and **quarterly** hog prices ("Barrows & Gilts, National Base").
+  Parse those into a quarterly series (e.g. `forecasts.production.quarters` + `quarter_values`)
+  so all three charts can render quarterly.
+
+### 11. Per-capita consumption for chicken & beef  🔴
+- **Chart:** Demand vs. Chicken and Beef.
+- **Problem:** We only have retail **prices** (FRED) for chicken/beef. To compare
+  **consumption volume** (lb/person/yr) across proteins, we need per-capita availability
+  for **beef and chicken**.
+- **Source:** USDA ERS Food Availability — same source already used for pork per-capita.
+  Expose e.g. `retail_demand.per_capita_by_meat.{pork,beef,chicken}`.
+
+---
+
 ## 1. US pork exports in PRODUCT weight  🔴
 - **Chart:** Pork Exports: US vs. Brazil (`tradeFlowChart`)
 - **Problem:** US exports are currently ingested in **carcass weight** (ERS carcass-wt
