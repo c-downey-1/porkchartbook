@@ -50,6 +50,27 @@ Status key: 🔴 not started · 🟡 in progress · 🟢 delivered
 - **Source:** USDA ERS Food Availability — same source already used for pork per-capita.
   Expose e.g. `retail_demand.per_capita_by_meat.{pork,beef,chicken}`.
 
+### 12. Exports as share of production — top exporters  🔴
+- **Chart:** "Exports as Share of Production — Top Exporters" placeholder (Trade, after the US export-share chart).
+- **Need:** Annual pork **exports** and **production** by country for the major exporters
+  (US, EU, Brazil, China, Canada, Mexico…) so we can plot exports ÷ production per country.
+- **Source:** USDA FAS **PSD** (Production, Supply & Distribution Online) — provides both
+  production and exports by country on a consistent CWE basis; free API / bulk download.
+  Annual only. Expose e.g. `world_psd.{country}.{production,exports}` or a precomputed
+  `export_share_by_country`.
+
+### 13. Farm-to-wholesale-to-retail price spread  🔴
+- **Chart:** Farm-to-Wholesale-to-Retail Price Spread placeholder (Cost, Prices & Margins).
+- **Problem:** We have the three price levels (hog net price & cutout in $/cwt carcass;
+  retail in $/lb) but on **incompatible bases** — a true spread needs all three on a common
+  retail-weight-equivalent $/lb, which requires yield conversion factors. Not safely
+  buildable from our current data.
+- **Source:** USDA ERS **Meat Price Spreads** — purpose-built: monthly farm value, wholesale
+  value, retail value, AND the spreads for pork, standardized to a retail-weight basis
+  (USDA factors: 1.869 lb hog / lb retail, 1.04 lb wholesale / lb retail), back to 1970.
+  Expose e.g. `price_spreads.{farm_value,wholesale_value,retail_value}` (and optionally the
+  precomputed spreads).
+
 ---
 
 ## 1. US pork exports in PRODUCT weight  🔴
@@ -127,6 +148,5 @@ Status key: 🔴 not started · 🟡 in progress · 🟢 delivered
 
 ## NOT data requests — buildable now from existing `data.json` (no colleague needed)
 These placeholders already have their underlying data; the frontend can build them anytime:
-- **Cost of Soybean Meal and Corn** — `costs_risk.corn_price` and `costs_risk.soybean_meal_price` already present.
-- **Farm-to-Wholesale-to-Retail Price Spread** — ingredients present (hog net price, cutout, featured retail price).
+- **Cost of Soybean Meal and Corn** — `costs_risk.corn_price` and `costs_risk.soybean_meal_price` already present. (Built.)
 - **Monthly Key Insights** — editorial content, not data.
