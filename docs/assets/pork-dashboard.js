@@ -371,14 +371,20 @@ function initPorkSidebarNav() {
     });
   }
 
-  const observer = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        groups.forEach(group => group.classList.toggle('is-active', group.dataset.section === entry.target.id));
-      }
+  // Scroll-spy: the active section is the last one whose top has crossed a trigger
+  // line near the top of the viewport. Deterministic, so it works for tall sections
+  // (Supply, Cost) that an intersection-ratio observer would miss.
+  function updateActiveSection() {
+    const triggerY = window.innerHeight * 0.28;
+    let activeId = sections[0] ? sections[0].id : null;
+    sections.forEach(section => {
+      if (section.getBoundingClientRect().top <= triggerY) activeId = section.id;
     });
-  }, { threshold: 0.2 });
-  sections.forEach(section => observer.observe(section));
+    groups.forEach(group => group.classList.toggle('is-active', group.dataset.section === activeId));
+  }
+  window.addEventListener('scroll', updateActiveSection, { passive: true });
+  window.addEventListener('resize', updateActiveSection);
+  updateActiveSection();
 }
 
 function formatSnapshotValue(card) {
@@ -507,13 +513,13 @@ function buildHerd(herd) {
     registerRangeControl({
       chartId: 'sowsFarrowedChart',
       options: ['1y', '5y', '10y', 'all'],
-      defaultRange: '10y',
+      defaultRange: '5y',
       renderer(range) {
         const { start, end } = getRangeSlice(sows.dates, range);
         renderLineChart(
           'sowsFarrowedChart',
           sows.dates.slice(start, end),
-          [dataset('Sows farrowed', toMillions(sows.values.slice(start, end)), C.navy)],
+          [dataset('Sows farrowed', toMillions(sows.values.slice(start, end)), C.navy, { borderWidth: 1.8 })],
           'Million head',
           {
             xRotation: 45,
@@ -546,7 +552,7 @@ function buildHerd(herd) {
     registerRangeControl({
       chartId: 'farrowComboTestChart',
       options: ['1y', '5y', '10y', 'all'],
-      defaultRange: '10y',
+      defaultRange: '5y',
       renderer(range) {
         const { start, end } = getRangeSlice(allDates, range);
         const labels = allDates.slice(start, end);
@@ -661,7 +667,7 @@ function buildNassSlaughter(sp) {
     registerRangeControl({
       chartId: 'commercialSlaughterChart',
       options: ['1y', '2y', '5y', '10y', 'all'],
-      defaultRange: '5y',
+      defaultRange: '2y',
       renderer(range) {
         const { start, end } = getRangeSlice(dates, range);
         const labels = dates.slice(start, end);
@@ -708,7 +714,7 @@ function buildNassSlaughter(sp) {
     registerRangeControl({
       chartId: 'commercialProductionChart',
       options: ['1y', '2y', '5y', '10y', 'all'],
-      defaultRange: '5y',
+      defaultRange: '2y',
       renderer(range) {
         const { start, end } = getRangeSlice(production.dates, range);
         renderBarChart(
@@ -857,7 +863,7 @@ function buildNassSlaughter(sp) {
     registerRangeControl({
       chartId: 'sowSlaughterChart',
       options: ['1y', '2y', '3y', '5y', '10y', 'all'],
-      defaultRange: '1y',
+      defaultRange: '5y',
       renderer(range) {
         const { start, end } = getRangeSlice(dates, range);
         const labels = dates.slice(start, end);
@@ -901,7 +907,7 @@ function buildPrices(prices) {
     registerRangeControl({
       chartId: 'hogPriceChart',
       options: HF_OPTIONS,
-      defaultRange: HF_DEFAULT,
+      defaultRange: '3m',
       renderer(range) {
         renderHfLine('hogPriceChart', [
           { label: 'Base price', series: base, color: C.navy },
@@ -918,7 +924,7 @@ function buildPrices(prices) {
   if (seriesHasData(cutout)) {
     registerRangeControl({
       chartId: 'cutoutChart',
-      options: HF_OPTIONS_EXT,
+      options: ['7d', '1m', '3m', '1y', '2y', '5y', 'all'],
       defaultRange: HF_DEFAULT,
       renderer(range) {
         renderHfLine('cutoutChart', [
@@ -930,20 +936,22 @@ function buildPrices(prices) {
     hideEmptyCard('cutoutChart');
   }
 
-  // Cutout less net hog price — daily spread (light line) + its monthly average overlaid (bold).
+  // Cutout less net hog price — daily spread (light line) + a 30-day rolling average (bold).
   const spread = prices.cutout_net_spread || prices.cutout_base_spread;
   if (seriesHasData(spread)) {
-    // Monthly average computed from the daily series itself.
-    const buckets = {};
-    spread.dates.forEach((d, i) => {
-      const v = spread.values[i];
-      if (v == null) return;
-      const m = d.slice(0, 7);
-      (buckets[m] = buckets[m] || { s: 0, n: 0 });
-      buckets[m].s += v; buckets[m].n += 1;
-    });
-    const monthAvg = {};
-    Object.keys(buckets).forEach(m => { monthAvg[m] = buckets[m].s / buckets[m].n; });
+    // 30-calendar-day trailing average of the daily series.
+    const roll = [];
+    for (let i = 0; i < spread.dates.length; i++) {
+      const startMs = new Date(spread.dates[i] + 'T00:00:00Z').getTime() - 29 * 86400000;
+      let s = 0, n = 0;
+      for (let j = i; j >= 0; j--) {
+        if (new Date(spread.dates[j] + 'T00:00:00Z').getTime() < startMs) break;
+        const v = spread.values[j];
+        if (v != null) { s += v; n += 1; }
+      }
+      roll.push(n ? s / n : null);
+    }
+    const rollMap = Object.fromEntries(spread.dates.map((d, i) => [d, roll[i]]));
     const DAYS = { '1m': 31, '3m': 92, '1y': 366, '2y': 731, '5y': 1827, all: null };
     registerRangeControl({
       chartId: 'spreadMergeTestChart',
@@ -951,10 +959,10 @@ function buildPrices(prices) {
       defaultRange: '2y',
       renderer(range) {
         const { dates, values } = sliceTrailingDays(spread.dates, spread.values, DAYS[range]);
-        const overlay = dates.map(d => monthAvg[d.slice(0, 7)] != null ? monthAvg[d.slice(0, 7)] : null);
+        const overlay = dates.map(d => rollMap[d] != null ? rollMap[d] : null);
         renderLineChart('spreadMergeTestChart', dates, [
           dataset('Daily spread', values, C.orange, { borderWidth: 1.2, pointRadius: 0, order: 2, fill: false }),
-          dataset('Monthly average', overlay, C.navy, { borderWidth: 2.6, pointRadius: 0, order: 1, tension: 0, fill: false }),
+          dataset('30-day average', overlay, C.navy, { borderWidth: 2.6, pointRadius: 0, order: 1, tension: 0, fill: false }),
         ], '$/cwt');
       }
     });
@@ -1052,7 +1060,7 @@ function buildRetailDemand(retail) {
     registerRangeControl({
       chartId: 'perCapitaChart',
       options: ['5y', '10y', 'all'],
-      defaultRange: '10y',
+      defaultRange: 'all',
       renderer(range) {
         const dates = allDates.slice(-(N[range] || 10));
         renderLineChart(
@@ -1087,7 +1095,7 @@ function buildInventoryTrade(inventoryTrade) {
     registerRangeControl({
       chartId: 'coldStorageChart',
       options: ['3y', '5y', '10y', 'all'],
-      defaultRange: '5y',
+      defaultRange: '3y',
       renderer(range) {
         const { start, end } = getRangeSlice(dates, range);
         const labels = dates.slice(start, end);
@@ -1142,19 +1150,43 @@ function buildInventoryTrade(inventoryTrade) {
     registerRangeControl({
       chartId: 'tradeFlowChart',
       options: ['3y', '5y', '10y', 'all'],
-      defaultRange: '5y',
+      defaultRange: '10y',
       renderer(range) {
         const { start, end } = quarterRangeSlice(quarterDates, range);
         const labels = quarterLabels(quarterDates.slice(start, end));
+        const usSlice = usQ.slice(start, end), bzSlice = bzQ.slice(start, end);
+        // Period growth: 1-year (4-quarter) average at each end, so a single noisy
+        // quarter doesn't distort the headline. Shown in the legend, updates per range.
+        const pctGrowth = arr => {
+          const v = arr.filter(x => x != null);
+          if (v.length < 2) return null;
+          const k = Math.min(4, Math.floor(v.length / 2));
+          const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+          const first = avg(v.slice(0, k));
+          if (!first) return null;
+          return Math.round((avg(v.slice(-k)) / first - 1) * 100);
+        };
+        const tag = g => g == null ? '' : (g >= 0 ? `  ▲ +${g}%` : `  ▼ ${Math.abs(g)}%`);
         renderLineChart(
           'tradeFlowChart',
           labels,
           [
-            dataset('US pork exports', usQ.slice(start, end), C.teal),
-            dataset('Brazil pork exports', bzQ.slice(start, end), C.navy),
+            dataset(`US pork exports${tag(pctGrowth(usSlice))}`, usSlice, C.teal),
+            dataset(`Brazil pork exports${tag(pctGrowth(bzSlice))}`, bzSlice, C.navy),
           ],
           'Million lb',
-          { aspect: 2.6, categoryX: true }
+          {
+            aspect: 2.6, categoryX: true,
+            tooltip: {
+              callbacks: {
+                label(ctx) {
+                  const v = Number(ctx.parsed.y);
+                  const name = (ctx.dataset.label || '').split('  ')[0];
+                  return Number.isFinite(v) ? `${name}: ${fmtNum(v, 0)}M lb` : name;
+                }
+              }
+            }
+          }
         );
       }
     });
@@ -1646,6 +1678,8 @@ function buildCostsRisk(costs) {
       renderer(range) {
         const { start, end } = getRangeSlice(dates, range);
         const labels = dates.slice(start, end);
+        // One shared $/ton axis: corn is always cheaper than soybean meal, so the
+        // lines sit in separate bands (corn below, soy above) without overlapping.
         renderLineChart('feedPriceChart', labels, [
           dataset('Corn', labels.map(d => cMap[d] != null ? cMap[d] : null), C.gold),
           dataset('Soybean meal', labels.map(d => sMap[d] != null ? sMap[d] : null), C.teal),

@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/split-dashboard.css?v=20260625g">
+<link rel="stylesheet" href="assets/split-dashboard.css?v=20260625m">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <!-- Microsoft Clarity - activate on launch
 <script type="text/javascript">
@@ -227,6 +227,11 @@
             <div class="sub">$/cwt, daily composite cutout.</div>
             <canvas id="cutoutChart"></canvas>
           </article>
+          <article class="card wide" id="spreadMergeTestWrap">
+            <h3>Cutout Less Net Hog Price</h3>
+            <div class="sub">$/cwt — daily spread (light line) with a 30-day rolling average overlaid (bold navy).</div>
+            <canvas id="spreadMergeTestChart"></canvas>
+          </article>
           <article class="card wide" id="primalsWrap">
             <h3>Primal Values</h3>
             <div class="sub">$/cwt for loin, butt, picnic, rib, ham, and belly.</div>
@@ -239,11 +244,6 @@
           </article>
           <article class="card wide placeholder">
             <h3>Farm-to-Wholesale-to-Retail Price Spread <span class="planned-tag">Planned</span></h3>
-          </article>
-          <article class="card wide" id="spreadMergeTestWrap">
-            <h3>Cutout Less Net Hog Price</h3>
-            <div class="sub">$/cwt — daily spread (light line) with the monthly average overlaid (bold navy).</div>
-            <canvas id="spreadMergeTestChart"></canvas>
           </article>
           <article class="card wide" id="forecastPriceWrap">
             <h3>Forecasted Price</h3>
@@ -306,7 +306,7 @@
     </main>
   </div>
 </div>
-<script src="assets/dashboard-common.js?v=20260625g"></script>
-<script src="assets/pork-dashboard.js?v=20260625g"></script>
+<script src="assets/dashboard-common.js?v=20260625m"></script>
+<script src="assets/pork-dashboard.js?v=20260625m"></script>
 </body>
 </html>
