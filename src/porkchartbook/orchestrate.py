@@ -119,6 +119,24 @@ SOURCES = [
         "fingerprint": [("wasde_forecasts", "report_month", None)],
     },
     {
+        "key": "fas_psd",
+        "label": "FAS PSD world pork production & exports by country",
+        "label_short": "FAS PSD",
+        "tier": "long-term",
+        "probe": None,  # ~1 MB bulk CSV; detect a new market year from the delta
+        "ingest": ingest.ingest_psd,
+        "fingerprint": [("fas_psd_pork", "market_year", None)],
+    },
+    {
+        "key": "ers_price_spreads",
+        "label": "ERS Meat Price Spreads (pork farm/wholesale/retail)",
+        "label_short": "ERS spreads",
+        "tier": "long-term",
+        "probe": None,  # monthly CSV; detect a new month from the delta
+        "ingest": ingest.ingest_ers_price_spreads,
+        "fingerprint": [("ers_price_spreads", "report_month", None)],
+    },
+    {
         "key": "nass",
         "label": "USDA NASS (hogs & pigs, slaughter, cold storage)",
         "label_short": "NASS",

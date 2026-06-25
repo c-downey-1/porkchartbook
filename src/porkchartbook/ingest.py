@@ -31,10 +31,12 @@ from .clients import ams_hog_client
 from .clients import census_trade_client
 from .clients import comexstat_client
 from .clients import ers_food_availability_client
+from .clients import ers_price_spreads_client
 from .clients import ers_trade_pork_client
 from .clients import fred_client
 from .clients import mars_client
 from .clients import nass_client
+from .clients import psd_client
 from .clients import wasde_client
 
 
@@ -430,27 +432,69 @@ def ingest_wasde(conn):
     print("  USDA WASDE — Pork production / exports / hog-price forecasts")
     print(f"{'=' * 60}")
     try:
-        rows = wasde_client.fetch_forecast_rows()
+        annual, quarterly = wasde_client.fetch_wasde_rows()
     except Exception as exc:
         print(f"  WASDE fetch failed: {exc}")
         return 0
-    if not rows:
+    if not annual and not quarterly:
         return 0
-    count = db.upsert_rows(conn, "wasde_forecasts", rows)
-    vintages = [r["report_month"] for r in rows if r.get("report_month")]
+    count = db.upsert_rows(conn, "wasde_forecasts", annual)
+    count += db.upsert_rows(conn, "wasde_quarterly", quarterly)
+    vintages = [r["report_month"] for r in annual + quarterly if r.get("report_month")]
     if vintages:
         db.log_fetch(conn, "wasde", min(vintages), max(vintages), count, data_item="pork_forecasts")
-    print(f"  WASDE complete: {count:,} rows")
+    print(f"  WASDE complete: {len(annual):,} annual + {len(quarterly):,} quarterly rows")
+    return count
+
+
+def ingest_ers_price_spreads(conn):
+    """Fetch ERS Meat Price Spreads for pork (monthly farm/wholesale/retail)."""
+    print(f"\n{'=' * 60}")
+    print("  ERS Meat Price Spreads — pork farm/wholesale/retail values")
+    print(f"{'=' * 60}")
+    try:
+        rows = ers_price_spreads_client.fetch_pork_spreads()
+    except Exception as exc:
+        print(f"  ERS price spreads fetch failed: {exc}")
+        return 0
+    if not rows:
+        return 0
+    count = db.upsert_rows(conn, "ers_price_spreads", rows)
+    months = [r["report_month"] for r in rows if r.get("report_month")]
+    if months:
+        db.log_fetch(conn, "ers_price_spreads", min(months), max(months), count, data_item="pork")
+    print(f"  ERS price spreads complete: {count:,} rows")
+    return count
+
+
+def ingest_psd(conn):
+    """Fetch FAS PSD world pork production & exports by country (annual)."""
+    print(f"\n{'=' * 60}")
+    print("  USDA FAS PSD — World pork production & exports by country")
+    print(f"{'=' * 60}")
+    try:
+        rows = psd_client.fetch_pork_psd()
+    except Exception as exc:
+        print(f"  PSD fetch failed: {exc}")
+        return 0
+    if not rows:
+        return 0
+    count = db.upsert_rows(conn, "fas_psd_pork", rows)
+    years = [str(r["market_year"]) for r in rows if r.get("market_year")]
+    if years:
+        db.log_fetch(conn, "fas_psd", min(years), max(years), count, data_item="pork_by_country")
+    print(f"  FAS PSD complete: {count:,} rows")
     return count
 
 
 def ingest_ers_food_availability(conn):
-    """Fetch ERS per-capita pork availability + supply-and-use (annual)."""
+    """Fetch ERS per-capita availability + pork supply-and-use (annual), plus
+    per-capita beef & chicken for the protein comparison."""
     print(f"\n{'=' * 60}")
-    print("  ERS Food Availability — Pork per-capita & disappearance")
+    print("  ERS Food Availability — pork/beef/chicken per-capita & disappearance")
     print(f"{'=' * 60}")
     try:
-        rows = ers_food_availability_client.fetch_pork_rows()
+        rows = ers_food_availability_client.fetch_meat_rows()
     except Exception as exc:
         print(f"  ERS food availability fetch failed: {exc}")
         return 0
@@ -459,7 +503,7 @@ def ingest_ers_food_availability(conn):
     count = db.upsert_rows(conn, "ers_food_availability", rows)
     years = [str(r["year"]) for r in rows if r.get("year")]
     if years:
-        db.log_fetch(conn, "ers_food_avail", min(years), max(years), count, data_item="red_meat_pork")
+        db.log_fetch(conn, "ers_food_avail", min(years), max(years), count, data_item="meat_per_capita")
     print(f"  ERS food availability complete: {count:,} rows")
     return count
 
@@ -592,6 +636,10 @@ def main():
                     help="Backfill ERS per-capita pork availability & disappearance (annual)")
     ap.add_argument("--backfill-wasde", action="store_true",
                     help="Fetch latest WASDE pork production/export/hog-price forecasts")
+    ap.add_argument("--backfill-psd", action="store_true",
+                    help="Fetch FAS PSD world pork production & exports by country")
+    ap.add_argument("--backfill-spreads", action="store_true",
+                    help="Fetch ERS Meat Price Spreads for pork (monthly)")
 
     # Update flags (incremental)
     ap.add_argument("--update", action="store_true",
@@ -655,6 +703,12 @@ def main():
         if args.backfill_all or args.backfill_wasde:
             ingest_wasde(conn)
 
+        if args.backfill_all or args.backfill_psd:
+            ingest_psd(conn)
+
+        if args.backfill_all or args.backfill_spreads:
+            ingest_ers_price_spreads(conn)
+
         if args.update:
             update_nass(conn)
             update_ams(conn)
@@ -666,12 +720,15 @@ def main():
             update_census(conn)
             ingest_ers_food_availability(conn)
             ingest_wasde(conn)
+            ingest_psd(conn)
+            ingest_ers_price_spreads(conn)
 
         all_actions = [
             args.backfill_all, args.backfill_nass, args.backfill_ams,
             args.backfill_ers, args.backfill_retail, args.backfill_fred,
             args.backfill_comex, args.backfill_census, args.backfill_ers_food,
-            args.backfill_wasde, args.update, args.status, args.smoke_test,
+            args.backfill_wasde, args.backfill_psd, args.backfill_spreads,
+            args.update, args.status, args.smoke_test,
         ]
         if not any(all_actions):
             ap.print_help()

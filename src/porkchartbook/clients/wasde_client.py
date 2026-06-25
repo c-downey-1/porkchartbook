@@ -176,17 +176,55 @@ def _parse_hog_price(lines, month_abbr):
     return out
 
 
-def fetch_forecast_rows(today=None):
-    """Fetch and parse WASDE pork forecasts into normalized rows ready for
-    db.upsert_rows into wasde_forecasts. Returns [] on fetch failure."""
+_ROMAN_TO_Q = {"I": "Q1", "II": "Q2", "III": "Q3", "IV": "Q4"}
+# Match a quarter label like "II" or "III*" (the * marks a forecast quarter).
+_QUARTER_RE = re.compile(r"(IV|III|II|I)(\*?)$")
+
+
+def _parse_quarterly_table(lines, header, col_idx):
+    """Parse a WASDE quarterly table (pork column at token col_idx after the
+    quarter label). Returns [(year, 'Q#', value, kind)], kind 'forecast' if the
+    quarter label carries a '*'. Annual rows (Annual/<Mon>Proj.) are skipped."""
+    out = []
+    in_section = False
+    cur_year = None
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(header):
+            in_section = True
+            continue
+        if not in_section:
+            continue
+        if stripped.startswith("====") or not stripped:
+            continue
+        # The next table's "U.S. ..." banner (or the WASDE footer) ends this one.
+        if stripped.startswith("WASDE") or stripped.startswith("U.S."):
+            break
+        toks = stripped.split()
+        if re.fullmatch(r"\d{4}", toks[0]):
+            cur_year = int(toks[0])
+            continue
+        match = _QUARTER_RE.fullmatch(toks[0])
+        if match and cur_year is not None and len(toks) > col_idx:
+            value = _safe_float(toks[col_idx])
+            if value is not None:
+                kind = "forecast" if match.group(2) else "estimate"
+                out.append((cur_year, _ROMAN_TO_Q[match.group(1)], value, kind))
+    return out
+
+
+def fetch_wasde_rows(today=None):
+    """Fetch the latest WASDE once and parse pork forecasts. Returns
+    (annual_rows, quarterly_rows) for db.upsert_rows into wasde_forecasts and
+    wasde_quarterly respectively. Returns ([], []) on fetch failure."""
     text, iso, abbr, url = fetch_latest_text(today)
     if not text:
-        return []
+        return [], []
     lines = text.splitlines()
     meats = _parse_meats_pork(lines, abbr)
     prices = _parse_hog_price(lines, abbr)
 
-    rows = []
+    annual = []
     for year, vals in meats.items():
         for metric, key, unit in (
             ("pork_production", "production", "million lb"),
@@ -195,26 +233,39 @@ def fetch_forecast_rows(today=None):
             value = vals.get(key)
             if value is None:
                 continue
-            rows.append({
-                "report_month": iso,
-                "marketing_year": year,
-                "metric": metric,
-                "value": value,
-                "unit": unit,
-                "vintage_kind": vals.get("kind", "forecast"),
-                "source_url": url,
+            annual.append({
+                "report_month": iso, "marketing_year": year, "metric": metric,
+                "value": value, "unit": unit,
+                "vintage_kind": vals.get("kind", "forecast"), "source_url": url,
             })
     for year, (price, kind) in prices.items():
         if price is None:
             continue
-        rows.append({
-            "report_month": iso,
-            "marketing_year": year,
-            "metric": "hog_price",
-            "value": price,
-            "unit": "$/cwt",
-            "vintage_kind": kind,
-            "source_url": url,
+        annual.append({
+            "report_month": iso, "marketing_year": year, "metric": "hog_price",
+            "value": price, "unit": "$/cwt", "vintage_kind": kind, "source_url": url,
         })
-    print(f"  [WASDE] Parsed {len(rows)} forecast rows (vintage {iso})")
-    return rows
+
+    # Quarterly: commercial pork production (Pork col) and the Barrows & Gilts
+    # national-base price (Barrows-and-gilts col); both sit at token index 2.
+    quarterly = []
+    quarterly_specs = [
+        ("U.S. Quarterly Animal Product Production", 2, "pork_production", "million lb"),
+        ("U.S. Quarterly Prices for Animal Products", 2, "hog_price", "$/cwt"),
+    ]
+    for header, col_idx, metric, unit in quarterly_specs:
+        for year, quarter, value, kind in _parse_quarterly_table(lines, header, col_idx):
+            quarterly.append({
+                "report_month": iso, "marketing_year": year, "quarter": quarter,
+                "metric": metric, "value": value, "unit": unit,
+                "vintage_kind": kind, "source_url": url,
+            })
+
+    print(f"  [WASDE] Parsed {len(annual)} annual + {len(quarterly)} quarterly rows (vintage {iso})")
+    return annual, quarterly
+
+
+def fetch_forecast_rows(today=None):
+    """Back-compat: return only the annual forecast rows."""
+    annual, _quarterly = fetch_wasde_rows(today)
+    return annual

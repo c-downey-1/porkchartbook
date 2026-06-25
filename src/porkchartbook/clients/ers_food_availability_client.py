@@ -35,6 +35,19 @@ REDMEAT_CSV_URL = (
 )
 
 PORK_COMMODITY = "Pork: Supply and use - carcass weight"
+BEEF_COMMODITY = "Beef: Supply and use - carcass weight"
+# Chicken per-capita lives in the separate poultry file.
+POULTRY_CSV_URL = (
+    "https://www.ers.usda.gov/media/5359/poultry-chicken-and-turkey.csv"
+)
+CHICKEN_COMMODITY = "Total chicken: Supply and use"
+
+# Per-capita availability attributes (boneless / retail / carcass, lb/person/yr).
+PER_CAPITA_ATTRS = {
+    "Food availability-Per capita availability-Boneless-Pounds",
+    "Food availability-Per capita availability-Retail-Pounds",
+    "Food availability-Per capita availability-Carcass-Pounds",
+}
 
 
 def _safe_float(value):
@@ -83,4 +96,54 @@ def fetch_pork_rows(csv_url=None):
             "source_url": url,
         })
     print(f"  [ERS-food] Parsed {len(rows)} pork rows")
+    return rows
+
+
+def _rows_from_csv(text, commodity_filter, out_commodity, url, attr_filter=None):
+    """Extract {commodity,year,attribute,value,source_url} rows for one commodity
+    from an ERS Food Availability CSV, optionally restricted to attr_filter."""
+    rows = []
+    for record in csv.reader(text.splitlines()):
+        if len(record) < 4 or record[0] != commodity_filter:
+            continue
+        attribute = record[2].strip()
+        if attr_filter is not None and attribute not in attr_filter:
+            continue
+        try:
+            year = int(record[1])
+        except (TypeError, ValueError):
+            continue
+        rows.append({
+            "commodity": out_commodity,
+            "year": year,
+            "attribute": attribute,
+            "value": _safe_float(record[3]),
+            "source_url": url,
+        })
+    return rows
+
+
+def fetch_meat_rows():
+    """Fetch ERS per-capita availability for pork (full supply-and-use), plus
+    per-capita series for beef (red-meat file) and chicken (poultry file).
+
+    Returns a flat list of ers_food_availability rows (commodity in
+    {pork, beef, chicken}). Each source file is downloaded once.
+    """
+    rows = []
+    try:
+        red_meat = _request_text(REDMEAT_CSV_URL)
+        rows += _rows_from_csv(red_meat, PORK_COMMODITY, "pork", REDMEAT_CSV_URL)
+        rows += _rows_from_csv(red_meat, BEEF_COMMODITY, "beef", REDMEAT_CSV_URL, PER_CAPITA_ATTRS)
+    except (HTTPError, URLError, Exception) as exc:
+        print(f"  [ERS-food] red-meat fetch failed: {exc}")
+    try:
+        poultry = _request_text(POULTRY_CSV_URL)
+        rows += _rows_from_csv(poultry, CHICKEN_COMMODITY, "chicken", POULTRY_CSV_URL, PER_CAPITA_ATTRS)
+    except (HTTPError, URLError, Exception) as exc:
+        print(f"  [ERS-food] poultry fetch failed: {exc}")
+    by_commodity = {}
+    for row in rows:
+        by_commodity[row["commodity"]] = by_commodity.get(row["commodity"], 0) + 1
+    print(f"  [ERS-food] Parsed {len(rows)} rows ({by_commodity})")
     return rows

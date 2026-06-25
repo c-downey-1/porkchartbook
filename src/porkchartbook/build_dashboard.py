@@ -528,6 +528,7 @@ def build_retail_demand(conn):
         "fred_chicken_price": _series(*chicken),
         "fred_beef_price": _series(*beef),
         "per_capita_disappearance": build_per_capita_disappearance(conn),
+        "per_capita_by_meat": build_per_capita_by_meat(conn),
     }
 
 
@@ -569,7 +570,10 @@ def build_forecasts(conn):
     out = {"source": "USDA WASDE", "vintage": latest, "history": {}}
     for metric, out_key, unit in METRICS:
         years = sorted({my for (m, my) in cells if m == metric})
-        latest_block = {"unit": unit, "years": [], "values": [], "kinds": []}
+        latest_block = {
+            "unit": unit, "years": [], "values": [], "kinds": [],
+            "quarters": [], "quarter_values": [], "quarter_kinds": [],
+        }
         for year in years:
             cell = cells[(metric, year)].get(latest)
             if not cell:
@@ -585,6 +589,49 @@ def build_forecasts(conn):
                 cells[(metric, year)].get(v, (None, None))[0] for v in vintages
             ]
         out["history"][metric] = {"vintages": vintages, "series": series}
+
+    # Quarterly series (latest vintage), attached to each metric block where
+    # WASDE publishes quarters (production and hog price; exports stays annual).
+    qrows = conn.execute(
+        """
+        SELECT report_month, marketing_year, quarter, metric, value, vintage_kind
+        FROM wasde_quarterly
+        WHERE value IS NOT NULL
+        """
+    ).fetchall()
+    if qrows:
+        q_latest = max(r[0] for r in qrows)
+        q_by_metric = defaultdict(list)
+        for report_month, marketing_year, quarter, metric, value, kind in qrows:
+            if report_month == q_latest:
+                q_by_metric[metric].append((marketing_year, quarter, value, kind))
+        metric_to_key = {metric: out_key for metric, out_key, _ in METRICS}
+        for metric, items in q_by_metric.items():
+            block = out.get(metric_to_key.get(metric))
+            if block is None:
+                continue
+            items.sort(key=lambda t: (t[0], t[1]))
+            block["quarters"] = [f"{y}-{q}" for (y, q, _, _) in items]
+            block["quarter_values"] = [v for (_, _, v, _) in items]
+            block["quarter_kinds"] = [k for (_, _, _, k) in items]
+    return out
+
+
+def build_per_capita_by_meat(conn):
+    """Per-capita availability (boneless, lb/person/yr) for pork, beef and
+    chicken from ERS Food Availability — for the protein-volume comparison."""
+    attr = "Food availability-Per capita availability-Boneless-Pounds"
+    out = {"unit": "lb per person per year"}
+    for meat in ("pork", "beef", "chicken"):
+        rows = conn.execute(
+            """
+            SELECT year, value FROM ers_food_availability
+            WHERE commodity = ? AND attribute = ? AND value IS NOT NULL
+            ORDER BY year
+            """,
+            (meat, attr),
+        ).fetchall()
+        out[meat] = _series([str(year) for year, _ in rows], [value for _, value in rows])
     return out
 
 
@@ -926,6 +973,86 @@ def build_census_trade(conn):
         "import_top_products": top_products("import"),
         "export_top_products": top_products("export"),
     }
+
+
+# Major pork exporters/producers to surface in the export-share-by-country chart.
+PSD_COUNTRIES = [
+    "United States", "European Union", "Brazil", "Canada", "China", "Mexico",
+]
+
+
+def build_world_psd(conn, year_ge=2000):
+    """World pork production, exports, and exports-as-share-of-production by
+    country (FAS PSD, 1000 MT CWE). Empty when no data."""
+    empty = {
+        "unit": "1000 MT CWE", "share_unit": "percent",
+        "countries": [], "years": [], "production": {}, "exports": {}, "export_share": {},
+    }
+    rows = conn.execute(
+        """
+        SELECT country, market_year, attribute, value
+        FROM fas_psd_pork
+        WHERE value IS NOT NULL AND market_year >= ?
+        """,
+        (year_ge,),
+    ).fetchall()
+    if not rows:
+        return empty
+
+    by_country_attr = defaultdict(dict)
+    years_present = set()
+    for country, market_year, attribute, value in rows:
+        if country not in PSD_COUNTRIES:
+            continue
+        by_country_attr[(country, attribute)][market_year] = value
+        years_present.add(market_year)
+
+    years = sorted(years_present)
+    countries = [c for c in PSD_COUNTRIES
+                 if (c, "production") in by_country_attr or (c, "exports") in by_country_attr]
+    production, exports, export_share = {}, {}, {}
+    for country in countries:
+        prod = [by_country_attr[(country, "production")].get(y) for y in years]
+        exp = [by_country_attr[(country, "exports")].get(y) for y in years]
+        production[country] = prod
+        exports[country] = exp
+        export_share[country] = [
+            (e / p * 100) if (e is not None and p not in (None, 0)) else None
+            for e, p in zip(exp, prod)
+        ]
+    return {
+        "unit": "1000 MT CWE", "share_unit": "percent",
+        "countries": countries, "years": [str(y) for y in years],
+        "production": production, "exports": exports, "export_share": export_share,
+    }
+
+
+def build_price_spreads(conn):
+    """ERS Meat Price Spreads for pork — monthly farm/wholesale/retail values and
+    the spreads, converted from cents to $/lb retail-equivalent. Empty when no
+    data."""
+    items = {
+        "farm_value": "gross_farm_value",
+        "net_farm_value": "net_farm_value",
+        "wholesale_value": "wholesale_value",
+        "retail_value": "retail_value",
+        "byproduct_value": "byproduct_value",
+        "farm_to_wholesale_spread": "farm_to_wholesale_spread",
+        "wholesale_to_retail_spread": "wholesale_to_retail_spread",
+        "farm_to_retail_spread": "farm_to_retail_spread",
+    }
+    out = {"unit": "$/lb retail equivalent"}
+    for out_key, item in items.items():
+        rows = conn.execute(
+            """
+            SELECT report_month, value FROM ers_price_spreads
+            WHERE item = ? AND value IS NOT NULL ORDER BY report_month
+            """,
+            (item,),
+        ).fetchall()
+        # Source is cents per lb retail-equivalent; expose as $/lb.
+        out[out_key] = _series([d for d, _ in rows], [v / 100.0 for _, v in rows])
+    return out
 
 
 def build_inventory_trade(conn, slaughter_production):
@@ -1355,6 +1482,8 @@ def build_data_json(conn):
         "trade": inventory_trade["trade"],
         "costs_risk": costs,
         "forecasts": build_forecasts(conn),
+        "world_psd": build_world_psd(conn),
+        "price_spreads": build_price_spreads(conn),
         "insights": build_insights(herd, slaughter, prices, retail, inventory_trade, costs),
         "data_freshness": build_data_freshness(conn),
         "meta": {

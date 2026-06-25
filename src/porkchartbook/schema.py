@@ -176,6 +176,24 @@ TABLES = {
             PRIMARY KEY (report_month, marketing_year, metric)
         )
     """,
+    # WASDE quarterly pork forecasts — commercial production (million lb) and the
+    # Barrows & Gilts national-base hog price ($/cwt), by forecast vintage
+    # (report_month), marketing_year and calendar quarter (Q1–Q4). Sibling of
+    # wasde_forecasts (which holds the annual figures).
+    "wasde_quarterly": """
+        CREATE TABLE IF NOT EXISTS wasde_quarterly (
+            report_month       TEXT NOT NULL,
+            marketing_year     INTEGER NOT NULL,
+            quarter            TEXT NOT NULL,
+            metric             TEXT NOT NULL,
+            value              REAL,
+            unit               TEXT,
+            vintage_kind       TEXT,
+            source_url         TEXT,
+            fetched_at         TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (report_month, marketing_year, quarter, metric)
+        )
+    """,
     # US per-capita pork availability + supply-and-use (domestic disappearance),
     # USDA ERS Food Availability (Per Capita) Data System. Annual, tidy long
     # format: one row per (commodity, year, attribute). value may be NULL where
@@ -189,6 +207,35 @@ TABLES = {
             source_url         TEXT,
             fetched_at         TEXT DEFAULT (datetime('now')),
             PRIMARY KEY (commodity, year, attribute)
+        )
+    """,
+    # USDA ERS Meat Price Spreads (pork) — monthly farm/wholesale/retail value and
+    # the spreads, in cents per lb of retail equivalent. One row per month/item.
+    "ers_price_spreads": """
+        CREATE TABLE IF NOT EXISTS ers_price_spreads (
+            report_month       TEXT NOT NULL,
+            item               TEXT NOT NULL,
+            value              REAL,
+            unit               TEXT,
+            source_url         TEXT,
+            fetched_at         TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (report_month, item)
+        )
+    """,
+    # World pork production & exports by country — USDA FAS PSD (annual, 1000 MT
+    # CWE). attribute in {production, exports}; one row per country/year/attribute.
+    "fas_psd_pork": """
+        CREATE TABLE IF NOT EXISTS fas_psd_pork (
+            commodity_code     TEXT NOT NULL,
+            country            TEXT NOT NULL,
+            country_code       TEXT NOT NULL,
+            market_year        INTEGER NOT NULL,
+            attribute          TEXT NOT NULL,
+            value              REAL,
+            unit               TEXT,
+            source_url         TEXT,
+            fetched_at         TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (country_code, market_year, attribute)
         )
     """,
     # US pork trade in PRODUCT weight by HS code — U.S. Census International
@@ -228,6 +275,9 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_comex_pork_cat ON comexstat_pork_exports(ncm_category, report_month)",
     "CREATE INDEX IF NOT EXISTS idx_comex_pork_country ON comexstat_pork_exports(country, report_month)",
     "CREATE INDEX IF NOT EXISTS idx_wasde_metric ON wasde_forecasts(metric, marketing_year, report_month)",
+    "CREATE INDEX IF NOT EXISTS idx_wasde_q ON wasde_quarterly(metric, marketing_year, quarter)",
+    "CREATE INDEX IF NOT EXISTS idx_psd_pork ON fas_psd_pork(country, market_year, attribute)",
+    "CREATE INDEX IF NOT EXISTS idx_price_spreads ON ers_price_spreads(item, report_month)",
     "CREATE INDEX IF NOT EXISTS idx_ers_food_avail ON ers_food_availability(commodity, year)",
     "CREATE INDEX IF NOT EXISTS idx_census_pork_month ON census_pork_trade(report_month)",
     "CREATE INDEX IF NOT EXISTS idx_census_pork_flow_cat ON census_pork_trade(flow, hs_category, report_month)",

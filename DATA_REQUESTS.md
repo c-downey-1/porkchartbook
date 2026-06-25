@@ -33,7 +33,7 @@ Status key: 🔴 not started · 🟡 in progress · 🟢 delivered
 
 ## Round 2 — follow-up requests (2026-06-25)
 
-### 10. Quarterly forecasts (production / exports / hog price)  🔴
+### 10. Quarterly forecasts (production / exports / hog price)  🟢
 - **Charts:** Forecast Production / Forecasted Exports / Forecasted Price.
 - **Problem:** WASDE was delivered **annual only** — `forecasts.production/exports/hog_price`
   each have just `years` (2025–2027), so the charts show only 2–3 points.
@@ -42,7 +42,7 @@ Status key: 🔴 not started · 🟡 in progress · 🟢 delivered
   Parse those into a quarterly series (e.g. `forecasts.production.quarters` + `quarter_values`)
   so all three charts can render quarterly.
 
-### 11. Per-capita consumption for chicken & beef  🔴
+### 11. Per-capita consumption for chicken & beef  🟢
 - **Chart:** Demand vs. Chicken and Beef.
 - **Problem:** We only have retail **prices** (FRED) for chicken/beef. To compare
   **consumption volume** (lb/person/yr) across proteins, we need per-capita availability
@@ -50,7 +50,7 @@ Status key: 🔴 not started · 🟡 in progress · 🟢 delivered
 - **Source:** USDA ERS Food Availability — same source already used for pork per-capita.
   Expose e.g. `retail_demand.per_capita_by_meat.{pork,beef,chicken}`.
 
-### 12. Exports as share of production — top exporters  🔴
+### 12. Exports as share of production — top exporters  🟢
 - **Chart:** "Exports as Share of Production — Top Exporters" placeholder (Trade, after the US export-share chart).
 - **Need:** Annual pork **exports** and **production** by country for the major exporters
   (US, EU, Brazil, China, Canada, Mexico…) so we can plot exports ÷ production per country.
@@ -59,7 +59,7 @@ Status key: 🔴 not started · 🟡 in progress · 🟢 delivered
   Annual only. Expose e.g. `world_psd.{country}.{production,exports}` or a precomputed
   `export_share_by_country`.
 
-### 13. Farm-to-wholesale-to-retail price spread  🔴
+### 13. Farm-to-wholesale-to-retail price spread  🟢
 - **Chart:** Farm-to-Wholesale-to-Retail Price Spread placeholder (Cost, Prices & Margins).
 - **Problem:** We have the three price levels (hog net price & cutout in $/cwt carcass;
   retail in $/lb) but on **incompatible bases** — a true spread needs all three on a common
