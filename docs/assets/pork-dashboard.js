@@ -783,7 +783,7 @@ function buildNassSlaughter(sp) {
           ],
           'Thousand head',
           {
-            stacked: true, yAxisWidth: 56,
+            stacked: true, yAxisWidth: 64, yTitlePad: { bottom: 8 },
             tooltip: {
               callbacks: {
                 label(ctx) {

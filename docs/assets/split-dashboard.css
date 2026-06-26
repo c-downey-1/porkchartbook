@@ -74,6 +74,12 @@ a{color:inherit}
   display:block;
 }
 
+/* On desktop the brand lives in the left rail; the top bar shows only the
+   title. On mobile the rail is hidden, so the top-bar brand returns. */
+.iaa-bar .iaa-brand{
+  display:none;
+}
+
 .iaa-brand-copy{
   display:grid;
   gap:4px;
@@ -117,11 +123,33 @@ a{color:inherit}
   top:24px;
   align-self:start;
   max-height:calc(100vh - 32px);
-  overflow:auto;
+  display:flex;
+  flex-direction:column;
+}
+
+/* Brand pinned to the top of the rail; only the nav below it scrolls. */
+.sidebar-brand{
+  flex:0 0 auto;
+  display:block;
+  margin:0 0 18px;
+  padding-right:18px;
+}
+.sidebar-brand img{
+  width:180px;
+  max-width:100%;
+  height:auto;
+  display:block;
+  opacity:.95;
+  transition:opacity .15s ease;
+}
+.sidebar-brand:hover img{
+  opacity:1;
 }
 
 .dashboard-sidebar-inner{
-  padding:8px 18px 0 0;
+  min-height:0;
+  overflow:auto;
+  padding:0 18px 0 0;
 }
 
 .dashboard-sidebar-nav{
@@ -129,33 +157,6 @@ a{color:inherit}
   gap:8px;
   padding-right:18px;
   border-right:1px solid var(--line);
-}
-
-.sidebar-brand{
-  position:fixed;
-  bottom:18px;
-  left:max(20px, calc((100vw - 1160px) / 2 - 30px));
-  width:222px;
-  z-index:10;
-  padding:0;
-  text-align:right;
-  opacity:0;
-  visibility:hidden;
-  pointer-events:none;
-  transition:opacity 2s ease, visibility 2s ease;
-}
-.sidebar-brand.is-visible{
-  opacity:1;
-  visibility:visible;
-  pointer-events:auto;
-}
-.sidebar-brand img{
-  width:180px;
-  opacity:.85;
-  transition:opacity .15s ease;
-}
-.sidebar-brand:hover img{
-  opacity:1;
 }
 
 /* Highlighted, centered signup call-to-action */
@@ -566,7 +567,7 @@ a{color:inherit}
 
 .section-head p{
   margin:8px 0 0;
-  max-width:62ch;
+  max-width:none;
   color:var(--muted);
   font-size:1.02rem;
   line-height:1.6;
@@ -1045,7 +1046,8 @@ a{color:inherit}
     flex-direction:column;
   }
 
-  .iaa-brand{
+  .iaa-bar .iaa-brand{
+    display:flex;
     width:100%;
     align-items:flex-start;
     flex-direction:column;

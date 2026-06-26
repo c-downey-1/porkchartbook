@@ -597,7 +597,7 @@ function baseOptions(yLabel, extra = {}) {
         grid: { drawOnChartArea: false, drawTicks: true, tickLength: 6 }
       },
       y: {
-        title: { display: !!yLabel, text: yLabel, color: '#5f7180', font: { size: isMobileWidth() ? 10 : 13, weight: '600' } },
+        title: { display: !!yLabel, text: yLabel, color: '#5f7180', font: { size: isMobileWidth() ? 10 : 13, weight: '600' }, padding: extra.yTitlePad },
         ticks: {
           color: '#627684',
           padding: isMobileWidth() ? 6 : 10,
@@ -768,13 +768,5 @@ document.addEventListener('click', event => {
   });
 })();
 
-/* Show sidebar logo when header brand scrolls out of view */
-(function () {
-  const headerBrand = document.getElementById('topHeaderBrand');
-  const sidebarBrand = document.getElementById('sidebarBrand');
-  if (!headerBrand || !sidebarBrand) return;
-  const observer = new IntersectionObserver(function (entries) {
-    sidebarBrand.classList.toggle('is-visible', !entries[0].isIntersecting);
-  }, { threshold: 0 });
-  observer.observe(headerBrand);
-})();
+/* The brand logo now lives in the left rail (always visible on desktop); no
+   scroll-driven toggle needed. */
