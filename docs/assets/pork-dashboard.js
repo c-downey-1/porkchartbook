@@ -263,6 +263,8 @@ function setPorkChartSources() {
   const wasde = '<a href="https://www.usda.gov/oce/commodity/wasde" target="_blank" rel="noreferrer">USDA WASDE</a>';
   const ersFood = '<a href="https://www.ers.usda.gov/data-products/food-availability-per-capita-data-system" target="_blank" rel="noreferrer">USDA ERS Food Availability</a>';
   const census = '<a href="https://www.census.gov/foreign-trade/data/" target="_blank" rel="noreferrer">US Census Trade</a>';
+  const fasPsd = '<a href="https://www.fas.usda.gov/data/production" target="_blank" rel="noreferrer">USDA FAS PSD</a>';
+  const ersSpreads = '<a href="https://www.ers.usda.gov/data-products/meat-price-spreads/" target="_blank" rel="noreferrer">USDA ERS Meat Price Spreads</a>';
 
   const srcMap = {
     herdBreedingMarketChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
@@ -273,9 +275,7 @@ function setPorkChartSources() {
     porkProductionChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
     carcassWeightChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
     commercialSlaughterChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
-    commercialProductionChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     productionSeasonalChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
-    avgWeightChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     sowSlaughterChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     hogPriceChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
     cutoutChart: `Chart: Innovate Animal Ag • Source: ${amsPk}`,
@@ -288,13 +288,15 @@ function setPorkChartSources() {
     exportDestinationsChart: `Chart: Innovate Animal Ag • Source: ${ers}`,
     importSourcesChart: `Chart: Innovate Animal Ag • Source: ${ers}`,
     exportComparisonChart: `Chart: Innovate Animal Ag • Source: ${ers}`,
-    exportShareChart: `Chart: Innovate Animal Ag • Source: ${ers} / ${nass}`,
     brazilDestinationsChart: `Chart: Innovate Animal Ag • Source: ${comex}`,
     feedPriceChart: `Chart: Innovate Animal Ag • Source: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a>`,
-    forecastProductionChart: `Chart: Innovate Animal Ag • Source: ${wasde}`,
+    forecastProductionChart: `Chart: Innovate Animal Ag • Source: ${nass} / ${wasde}`,
     forecastExportsChart: `Chart: Innovate Animal Ag • Source: ${wasde}`,
-    forecastPriceChart: `Chart: Innovate Animal Ag • Source: ${wasde}`,
+    forecastPriceChart: `Chart: Innovate Animal Ag • Source: ${amsHg} / ${wasde}`,
     perCapitaChart: `Chart: Innovate Animal Ag • Source: ${ersFood}`,
+    proteinConsumptionChart: `Chart: Innovate Animal Ag • Source: ${ersFood}`,
+    exportShareCountriesChart: `Chart: Innovate Animal Ag • Source: ${fasPsd}`,
+    spreadDollarChart: `Chart: Innovate Animal Ag • Source: ${ersSpreads}`,
     importCutsChart: `Chart: Innovate Animal Ag • Source: ${census}`,
     inputCostChart: `Chart: Innovate Animal Ag • Sources: <a href="https://www.cmegroup.com/markets/agriculture.html" target="_blank" rel="noreferrer">CME Group</a> · <a href="https://fred.stlouisfed.org/series/GASDESW" target="_blank" rel="noreferrer">FRED GASDESW</a> · <a href="https://fred.stlouisfed.org/series/APU000072610" target="_blank" rel="noreferrer">FRED APU000072610</a>`,
   };
@@ -419,7 +421,7 @@ function buildHerd(herd) {
     registerRangeControl({
       chartId: 'herdBreedingMarketChart',
       options: ['1y', '5y', '10y', 'all'],
-      defaultRange: '10y',
+      defaultRange: '5y',
       renderer(range) {
         // Quarterly data: count range windows in quarters and use a category
         // x-axis with auto-skip so the labels aren't all crammed together.
@@ -431,7 +433,7 @@ function buildHerd(herd) {
           [dataset('Breeding stock', toMillions(breeding.values.slice(start, end)), C.navy, { fill: true, backgroundColor: 'rgba(1,48,70,0.08)' })],
           'Million head',
           {
-            categoryX: true, maxTicks: 10,
+            categoryX: true, maxTicks: 6, yAxisWidth: 56,
             tooltip: {
               callbacks: {
                 label(ctx) {
@@ -708,28 +710,6 @@ function buildNassSlaughter(sp) {
     hideEmptyCard('commercialSlaughterChart');
   }
 
-  // Commercial pork production (carcass weight).
-  const production = sp.nass_pork_production;
-  if (seriesHasData(production)) {
-    registerRangeControl({
-      chartId: 'commercialProductionChart',
-      options: ['1y', '2y', '5y', '10y', 'all'],
-      defaultRange: '2y',
-      renderer(range) {
-        const { start, end } = getRangeSlice(production.dates, range);
-        renderBarChart(
-          'commercialProductionChart',
-          production.dates.slice(start, end),
-          [dataset('Commercial pork production', toMillions(production.values.slice(start, end)), C.navy)],
-          'Million lb',
-          { yAxisWidth: 94 }
-        );
-      }
-    });
-  } else {
-    hideEmptyCard('commercialProductionChart');
-  }
-
   // Monthly production comparison — same data, one line per year (last N) on a
   // Jan-Dec axis. Recent years are highlighted (2026 yellow, 2025 orange) and
   // prior years are gray, for a seasonal vs-history read.
@@ -779,79 +759,6 @@ function buildNassSlaughter(sp) {
     hideEmptyCard('productionSeasonalChart');
   }
 
-  // Average live & dressed (carcass) weight.
-  const live = sp.nass_live_weight;
-  const dressed = sp.nass_dressed_weight;
-  if (seriesHasData(live) || seriesHasData(dressed)) {
-    const dates = [...new Set([...(live?.dates || []), ...(dressed?.dates || [])])].sort();
-    const liveMap = Object.fromEntries((live?.dates || []).map((d, i) => [d, live.values[i]]));
-    const dressedMap = Object.fromEntries((dressed?.dates || []).map((d, i) => [d, dressed.values[i]]));
-    registerRangeControl({
-      chartId: 'avgWeightChart',
-      options: ['1y', '2y', '3y', '5y', '10y', 'all'],
-      defaultRange: '5y',
-      renderer(range) {
-        const { start, end } = getRangeSlice(dates, range);
-        const labels = dates.slice(start, end);
-        // Stack dressed weight + the live-minus-dressed remainder so the bar totals
-        // average live weight (i.e. dressed carcass sits "inside" live weight).
-        const dressedVals = labels.map(d => dressedMap[d] ?? null);
-        const diffVals = labels.map(d => {
-          const l = liveMap[d], dr = dressedMap[d];
-          return (l != null && dr != null) ? Math.max(0, l - dr) : null;
-        });
-        // Anchor the y-axis near the data band instead of zero so month-to-month
-        // weight changes are legible — a 0-based stack flattens the ~210-290 lb
-        // range into a near-flat block. Floor sits below the min dressed weight
-        // (the bottom segment, so it never clips) and the cap above max live
-        // weight (the top of the stack).
-        const floorVals = dressedVals.filter(v => v != null);
-        const topVals = labels.map(d => liveMap[d] ?? dressedMap[d]).filter(v => v != null);
-        let yMin, yMax;
-        if (floorVals.length && topVals.length) {
-          const lo = Math.min(...floorVals);
-          const hi = Math.max(...topVals);
-          const pad = Math.max(1, (hi - lo) * 0.15);
-          yMin = Math.floor(lo - pad);
-          yMax = Math.ceil(hi + pad);
-        }
-        renderBarChart(
-          'avgWeightChart',
-          labels,
-          [
-            dataset('Avg dressed weight', dressedVals, C.navy, { stack: 'wt' }),
-            dataset('Live weight', diffVals, C.sky, { stack: 'wt' }),
-          ],
-          'Pounds',
-          {
-            stacked: true,
-            yMin, yMax,
-            tooltip: {
-              callbacks: {
-                label(ctx) {
-                  // The top segment is stacked as (live − dressed) so the bar height
-                  // equals live weight — but on hover show the actual live weight value.
-                  if (ctx.dataset.label === 'Live weight') {
-                    const liveVal = liveMap[ctx.label];
-                    return liveVal != null ? `Live weight: ${fmtNum(liveVal, 0)} lb` : '';
-                  }
-                  const v = Number(ctx.parsed.y);
-                  if (!Number.isFinite(v)) return ctx.dataset.label || '';
-                  return `${ctx.dataset.label}: ${fmtNum(v, 0)} lb`;
-                },
-                footer(items) {
-                  const total = items.reduce((sum, it) => sum + (Number(it.parsed.y) || 0), 0);
-                  return `Total: ${fmtNum(total, 0)} lb`;
-                }
-              }
-            }
-          }
-        );
-      }
-    });
-  } else {
-    hideEmptyCard('avgWeightChart');
-  }
 
   // Sow & boar slaughter (thousand head) — breeding-herd cull signal.
   const sows = sp.nass_sows;
@@ -876,7 +783,7 @@ function buildNassSlaughter(sp) {
           ],
           'Thousand head',
           {
-            stacked: true,
+            stacked: true, yAxisWidth: 56,
             tooltip: {
               callbacks: {
                 label(ctx) {
@@ -1079,6 +986,31 @@ function buildRetailDemand(retail) {
     hideEmptyCard('perCapitaChart');
   }
 
+  // Per-capita consumption: pork vs chicken vs beef (ERS Food Availability, annual).
+  const pbm = retail.per_capita_by_meat || {};
+  const pork = pbm.pork, beef = pbm.beef, chicken = pbm.chicken;
+  if (seriesHasData(pork) || seriesHasData(beef) || seriesHasData(chicken)) {
+    const allDates = [...new Set([...(pork?.dates || []), ...(beef?.dates || []), ...(chicken?.dates || [])])]
+      .filter(d => d >= '1966').sort();
+    const mk = s => Object.fromEntries((s?.dates || []).map((d, i) => [d, s.values[i]]));
+    const pMap = mk(pork), bMap = mk(beef), cMap = mk(chicken);
+    const N = { '5y': 5, '10y': 10, all: 9999 };
+    registerRangeControl({
+      chartId: 'proteinConsumptionChart',
+      options: ['5y', '10y', 'all'],
+      defaultRange: 'all',
+      renderer(range) {
+        const dates = allDates.slice(-(N[range] || 9999));
+        renderLineChart('proteinConsumptionChart', dates, [
+          dataset('Pork', dates.map(d => pMap[d] ?? null), C.navy),
+          dataset('Chicken', dates.map(d => cMap[d] ?? null), C.teal),
+          dataset('Beef', dates.map(d => bMap[d] ?? null), C.orange),
+        ], 'lb / person / yr', { categoryX: true, maxTicks: 12 });
+      }
+    });
+  } else {
+    hideEmptyCard('proteinConsumptionChart');
+  }
 }
 
 function buildInventoryTrade(inventoryTrade) {
@@ -1327,27 +1259,6 @@ function buildInventoryTrade(inventoryTrade) {
     hideEmptyCard('importSourcesChart');
   }
 
-  const share = inventoryTrade.export_share_of_production;
-  if (seriesHasData(share)) {
-    // 12-month rolling average over the full series so each range window keeps its trailing-year context.
-    const shareRolling = rollingAverage(share.values, 12);
-    registerRangeControl({
-      chartId: 'exportShareChart',
-      options: ['3y', '5y', '10y', 'all'],
-      defaultRange: 'all',
-      renderer(range) {
-        const { start, end } = getRangeSlice(share.dates, range);
-        renderLineChart(
-          'exportShareChart',
-          share.dates.slice(start, end),
-          [dataset('Exports as share of production (12-mo avg)', shareRolling.slice(start, end), C.orange, { fill: true, backgroundColor: 'rgba(246,133,31,0.10)' })],
-          '%'
-        );
-      }
-    });
-  } else {
-    hideEmptyCard('exportShareChart');
-  }
 
   // Brazil top export destinations (Comex Stat). The total export line itself is
   // overlaid on the Pork Exports vs. Imports chart above; here the same total
@@ -1691,6 +1602,66 @@ function buildCostsRisk(costs) {
   }
 }
 
+// Farm-to-wholesale-to-retail price spread — "where the retail pork dollar goes".
+// Stacked area on a common retail-weight $/lb basis: net farm value (producer) +
+// farm-to-wholesale spread (packer/processor) + wholesale-to-retail spread
+// (retailer) sum to the retail price. USDA ERS Meat Price Spreads, monthly.
+function buildPriceSpread(ps) {
+  const chartId = 'spreadDollarChart';
+  const farm = ps && ps.net_farm_value;
+  const fw = ps && ps.farm_to_wholesale_spread;
+  const wr = ps && ps.wholesale_to_retail_spread;
+  if (!seriesHasData(farm) || !seriesHasData(fw) || !seriesHasData(wr)) {
+    hideEmptyCard(chartId);
+    return;
+  }
+  const dates = [...new Set([...(farm.dates || []), ...(fw.dates || []), ...(wr.dates || [])])]
+    .filter(d => d >= '2000').sort();
+  const mk = s => Object.fromEntries((s?.dates || []).map((d, i) => [d, s.values[i]]));
+  const farmMap = mk(farm), fwMap = mk(fw), wrMap = mk(wr);
+  const N = { '5y': 60, '10y': 120, all: 9999 };
+  // Translucent fills so the stack reads as bands; keep a thin matching border.
+  const band = (color, alpha) => ({
+    fill: true,
+    backgroundColor: `${color}${alpha}`,
+    borderColor: color,
+    borderWidth: 1.6,
+    tension: 0.1,
+  });
+  registerRangeControl({
+    chartId,
+    options: ['5y', '10y', 'all'],
+    defaultRange: '10y',
+    renderer(range) {
+      const labels = dates.slice(-(N[range] || 120));
+      renderLineChart(chartId, labels, [
+        dataset('Net farm value (producer)', labels.map(d => farmMap[d] ?? null), C.navy,
+          Object.assign({ fill: 'origin' }, band(C.navy, '66'))),
+        dataset('Farm-to-wholesale spread (packer)', labels.map(d => fwMap[d] ?? null), C.teal,
+          Object.assign({ fill: '-1' }, band(C.teal, '66'))),
+        dataset('Wholesale-to-retail spread (retailer)', labels.map(d => wrMap[d] ?? null), C.gold,
+          Object.assign({ fill: '-1' }, band(C.gold, '88'))),
+      ], '$ / lb (retail weight)', {
+        stacked: true,
+        yMin: 0,
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const v = Number(ctx.parsed.y);
+              if (!Number.isFinite(v)) return ctx.dataset.label || '';
+              return `${ctx.dataset.label}: $${fmtNum(v, 2)}`;
+            },
+            footer(items) {
+              const total = items.reduce((sum, it) => sum + (Number(it.parsed.y) || 0), 0);
+              return `Retail price: $${fmtNum(total, 2)} / lb`;
+            }
+          }
+        }
+      });
+    }
+  });
+}
+
 function initMonthlySignup(data) {
   const form = document.getElementById('dashboardSignupForm');
   const status = document.getElementById('dashboardSignupStatus');
@@ -1707,38 +1678,140 @@ function initMonthlySignup(data) {
 // WASDE forecast bars — production, exports, hog price. Each marketing year is
 // a single bar; the most recent actual (estimate) is grey and the projections
 // are coloured, split into two datasets so the legend reads Estimate / Forecast.
-function buildForecasts(forecasts) {
-  const specs = [
-    { chartId: 'forecastProductionChart', block: forecasts.production, color: C.navy },
-    { chartId: 'forecastExportsChart', block: forecasts.exports, color: C.teal },
-    { chartId: 'forecastPriceChart', block: forecasts.hog_price, color: C.orange },
-  ];
-  specs.forEach(({ chartId, block, color }) => {
-    if (!block || !(block.values || []).some(v => v != null)) {
-      hideEmptyCard(chartId);
-      return;
-    }
-    const years = block.years || [];
-    const kinds = block.kinds || [];
-    const estimate = years.map((_, i) => kinds[i] === 'estimate' ? block.values[i] : null);
-    const forecast = years.map((_, i) => kinds[i] !== 'estimate' ? block.values[i] : null);
-    const unit = block.unit || '';
-    renderBarChart(chartId, years, [
-      dataset('Estimate', estimate, C.slate, { stack: 'wasde' }),
-      dataset('Forecast', forecast, color, { stack: 'wasde' }),
-    ], unit, {
-      stacked: true,
-      tooltip: {
-        callbacks: {
-          label(ctx) {
-            const v = Number(ctx.parsed.y);
-            if (!Number.isFinite(v)) return '';
-            return `${ctx.dataset.label}: ${fmtNum(v, 1)} ${unit}`;
+function buildExportShareByCountry(world) {
+  const chartId = 'exportShareCountriesChart';
+  if (!world || !world.export_share || !(world.years || []).length) { hideEmptyCard(chartId); return; }
+  const years = world.years.map(String);
+  const picks = [
+    ['United States', C.navy],
+    ['European Union', C.teal],
+    ['Brazil', C.orange],
+    ['Canada', C.gold],
+  ].filter(([c]) => world.export_share[c]);
+  const N = { '10y': 10, all: 9999 };
+  registerRangeControl({
+    chartId,
+    options: ['10y', 'all'],
+    defaultRange: 'all',
+    renderer(range) {
+      const idx0 = Math.max(0, years.length - (N[range] || 9999));
+      const labels = years.slice(idx0);
+      const datasets = picks.map(([c, color]) =>
+        dataset(c, world.export_share[c].slice(idx0), color, { pointRadius: 0 })
+      );
+      renderLineChart(chartId, labels, datasets, '% of production exported', {
+        categoryX: true, maxTicks: 12,
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const v = Number(ctx.parsed.y);
+              if (!Number.isFinite(v)) return '';
+              return `${ctx.dataset.label}: ${fmtNum(v, 1)}%`;
+            }
           }
         }
+      });
+    }
+  });
+}
+
+function buildForecasts(data) {
+  const forecasts = data.forecasts || {};
+  // Quarterly line: long actuals history spliced with the WASDE quarterly forecast.
+  // Solid through Q2 2026 (actual/estimate), dotted from Q3 2026 (forecast), same colour.
+  const CUT = '2026-Q2';
+  const qOf = ym => `${ym.slice(0, 4)}-Q${Math.ceil(Number(ym.slice(5, 7)) / 3)}`;
+  const qLabel = q => { const p = q.split('-'); return `${p[1]} ${p[0]}`; };
+  const quarterlyActuals = (series, scale, agg) => {
+    const b = {};
+    ((series && series.dates) || []).forEach((d, i) => {
+      const v = series.values[i];
+      if (v == null) return;
+      const q = qOf(d);
+      (b[q] = b[q] || { s: 0, n: 0, m: new Set() });
+      b[q].s += v; b[q].n += 1; b[q].m.add(d.slice(0, 7));
+    });
+    const out = {};
+    Object.keys(b).forEach(q => { if (b[q].m.size >= 3) out[q] = (agg === 'avg' ? b[q].s / b[q].n : b[q].s) / scale; });
+    return out;
+  };
+  const Q_PER_RANGE = { '3y': 12, '5y': 20, '10y': 40 };
+  const renderForecast = (chartId, actualsQ, wasde, yLabel, name, color, digits, opts) => {
+    opts = opts || {};
+    const fcLabel = opts.fcLabel || 'Forecast';
+    const wq = (wasde && wasde.quarters) || [], wv = (wasde && wasde.quarter_values) || [];
+    const wMap = {}; wq.forEach((q, i) => { wMap[q] = wv[i]; });
+    let allQ = [...new Set([...Object.keys(actualsQ), ...wq])].sort();
+    if (opts.minYear) allQ = allQ.filter(q => Number(q.slice(0, 4)) >= opts.minYear);
+    if (!allQ.length) { hideEmptyCard(chartId); return; }
+    const val = q => actualsQ[q] != null ? actualsQ[q] : (wMap[q] != null ? wMap[q] : null);
+    const solidF = allQ.map(q => q <= CUT ? val(q) : null);
+    const dottedF = allQ.map(q => q >= CUT ? val(q) : null);
+    const labelsF = allQ.map(qLabel);
+    registerRangeControl({
+      chartId,
+      options: opts.ranges || [],
+      defaultRange: opts.defaultRange,
+      renderer(range) {
+        const n = (range && Q_PER_RANGE[range]) ? Math.min(Q_PER_RANGE[range], labelsF.length) : labelsF.length;
+        const sl = a => a.slice(-n);
+        renderLineChart(chartId, sl(labelsF), [
+          dataset(name, sl(solidF), color, { pointRadius: 0, legendKey: 'fc', legendLabel: name }),
+          dataset(fcLabel, sl(dottedF), color, { pointRadius: 0, borderDash: [5, 4], legendKey: 'fc', legendLabel: name }),
+        ], yLabel, {
+          categoryX: true, maxTicks: 12, xRotation: 45,
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                const v = Number(ctx.parsed.y);
+                if (!Number.isFinite(v)) return '';
+                return `${ctx.dataset.label}: ${fmtNum(v, digits)} ${yLabel}`;
+              }
+            }
+          }
+        });
       }
     });
-  });
+  };
+  const FC_RANGES = { ranges: ['3y', '5y', '10y', 'all'], defaultRange: '5y' };
+
+  renderForecast('forecastProductionChart',
+    quarterlyActuals((data.slaughter_production || {}).nass_pork_production, 1e6, 'sum'),
+    forecasts.production, 'Million lb', 'Commercial pork production', C.navy, 0, FC_RANGES);
+  renderForecast('forecastPriceChart',
+    quarterlyActuals((data.prices || {}).barrow_gilt_net_price, 1, 'avg'),
+    forecasts.hog_price, '$/cwt', 'Hog price (barrows & gilts)', C.navy, 1,
+    Object.assign({ minYear: 2006 }, FC_RANGES));
+
+  // Exports — WASDE forecasts exports annually only, so build quarterly actuals and
+  // split the WASDE annual forecast across quarters by the recent seasonal pattern
+  // (an estimate, labelled as such).
+  const ex = forecasts.exports;
+  const tt = ((data.inventory_trade || {}).trade || {}).trade_totals;
+  const exActualsQ = quarterlyActuals(tt ? { dates: tt.dates, values: tt.export_pork } : null, 1000, 'sum');
+  if (ex && (ex.values || []).some(v => v != null) && Object.keys(exActualsQ).length) {
+    // Recent-5-year average seasonal shares (each calendar quarter's share of its year).
+    const byYear = {};
+    Object.keys(exActualsQ).forEach(q => { const p = q.split('-'); (byYear[p[0]] = byYear[p[0]] || {})[p[1]] = exActualsQ[q]; });
+    const complete = Object.keys(byYear).filter(y => Object.keys(byYear[y]).length === 4).sort().slice(-5);
+    const sum = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 }; let nY = 0;
+    complete.forEach(y => {
+      const yr = byYear[y], tot = yr.Q1 + yr.Q2 + yr.Q3 + yr.Q4;
+      if (tot > 0) { ['Q1', 'Q2', 'Q3', 'Q4'].forEach(qq => { sum[qq] += yr[qq] / tot; }); nY++; }
+    });
+    const share = nY ? { Q1: sum.Q1 / nY, Q2: sum.Q2 / nY, Q3: sum.Q3 / nY, Q4: sum.Q4 / nY } : { Q1: .25, Q2: .25, Q3: .25, Q4: .25 };
+    const annual = {}; (ex.years || []).forEach((y, i) => { annual[y] = ex.values[i]; });
+    const synthQ = [], synthV = [];
+    ['2026', '2027'].forEach(y => {
+      if (annual[y] == null) return;
+      ['Q1', 'Q2', 'Q3', 'Q4'].forEach(qq => { synthQ.push(`${y}-${qq}`); synthV.push(annual[y] * share[qq]); });
+    });
+    renderForecast('forecastExportsChart', exActualsQ, { quarters: synthQ, quarter_values: synthV },
+      'Million lb', 'Pork exports', C.teal, 0,
+      Object.assign({ fcLabel: 'Forecast (est.)', minYear: 2006 }, FC_RANGES));
+  } else {
+    hideEmptyCard('forecastExportsChart');
+  }
 }
 
 async function loadPorkDashboard() {
@@ -1758,7 +1831,9 @@ async function loadPorkDashboard() {
     buildRetailDemand(data.retail_demand || {});
     buildInventoryTrade(data.inventory_trade || { trade: data.trade || {} });
     buildCostsRisk(data.costs_risk || {});
-    buildForecasts(data.forecasts || {});
+    buildPriceSpread(data.price_spreads || {});
+    buildForecasts(data);
+    buildExportShareByCountry(data.world_psd || {});
     initMonthlySignup(data);
 
     setPorkChartSources();

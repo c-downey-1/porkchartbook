@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/split-dashboard.css?v=20260625m">
+<link rel="stylesheet" href="assets/split-dashboard.css?v=20260625y">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <!-- Microsoft Clarity - activate on launch
 <script type="text/javascript">
@@ -54,15 +54,10 @@
           <p>Daily and monthly processing throughput, pork production, carcass weights, herd inventory, farrowings, and cold-storage stocks — the full supply pipeline from breeding herd to frozen product.</p>
         </div></div>
         <div class="grid">
-          <article class="card half" id="porkProductionWrap">
+          <article class="card wide" id="porkProductionWrap">
             <h3>Estimated Daily Pork Production</h3>
             <div class="sub">Daily estimated pork production, million lb (daily hogs × carcass weight).</div>
             <canvas id="porkProductionChart"></canvas>
-          </article>
-          <article class="card half" id="commercialProductionWrap">
-            <h3>Commercial Pork Production</h3>
-            <div class="sub">Million lb per month, carcass weight, all commercial plants.</div>
-            <canvas id="commercialProductionChart"></canvas>
           </article>
           <article class="card wide" id="productionSeasonalWrap">
             <h3>Monthly Production Comparison</h3>
@@ -79,15 +74,10 @@
             <div class="sub">Million head per month, stacked — federally inspected plus the non-FI remainder totals commercial slaughter.</div>
             <canvas id="commercialSlaughterChart"></canvas>
           </article>
-          <article class="card half" id="carcassWeightWrap">
-            <h3>Average Carcass Weight (daily)</h3>
+          <article class="card wide" id="carcassWeightWrap">
+            <h3>Average Carcass Weight</h3>
             <div class="sub">Average carcass weight, pounds (AMS LM_HG201).</div>
             <canvas id="carcassWeightChart"></canvas>
-          </article>
-          <article class="card half" id="avgWeightWrap">
-            <h3>Average Slaughter Weight (monthly)</h3>
-            <div class="sub">Pounds per head — dressed (carcass) weight stacked inside average live weight.</div>
-            <canvas id="avgWeightChart"></canvas>
           </article>
           <article class="card wide" id="marketWeightWrap">
             <h3>Hog Inventory by Weight Class</h3>
@@ -104,12 +94,12 @@
             <div class="sub">Million head.</div>
             <canvas id="sowsFarrowedChart"></canvas>
           </article>
-          <article class="card wide" id="herdBreedingMarketWrap">
+          <article class="card half" id="herdBreedingMarketWrap">
             <h3>Breeding Stock Inventory</h3>
             <div class="sub">Million head, quarterly.</div>
             <canvas id="herdBreedingMarketChart"></canvas>
           </article>
-          <article class="card wide" id="sowSlaughterWrap">
+          <article class="card half" id="sowSlaughterWrap">
             <h3>Sow &amp; Boar Slaughter</h3>
             <div class="sub">Thousand head per month (federally inspected).</div>
             <canvas id="sowSlaughterChart"></canvas>
@@ -121,7 +111,7 @@
           </article>
           <article class="card wide" id="forecastProductionWrap">
             <h3>Forecast Production</h3>
-            <div class="sub">USDA WASDE US commercial pork production forecast, million lb. The most recent marketing year is the estimate; following years are projections.</div>
+            <div class="sub">Million lb per quarter. Solid = actual/estimate through Q2 2026; dotted = USDA WASDE forecast (Q3 2026 on).</div>
             <canvas id="forecastProductionChart"></canvas>
           </article>
         </div>
@@ -144,6 +134,11 @@
             <div class="sub">Feature rate (left axis): the share of surveyed stores running a pork ad.<br>Activity index (right axis): a composite of the overall intensity of pork advertising (breadth + how many items/ads).</div>
             <canvas id="retailFeatureChart"></canvas>
           </article>
+          <article class="card wide" id="proteinConsumptionWrap">
+            <h3>Per Capita Consumption: Pork vs. Chicken vs. Beef</h3>
+            <div class="sub">Lb per person per year. USDA ERS Food Availability, annual.</div>
+            <canvas id="proteinConsumptionChart"></canvas>
+          </article>
         </div>
       </section>
 
@@ -154,14 +149,6 @@
           <p>Monthly pork export and import flows, destination and source mix, Brazil competition, and exports as a share of production.</p>
         </div></div>
         <div class="grid">
-          <article class="card wide" id="exportShareWrap">
-            <h3>Exports as Share of Production</h3>
-            <div class="sub">US pork exports divided by NASS commercial pork production (carcass weight), 12-month rolling average.</div>
-            <canvas id="exportShareChart"></canvas>
-          </article>
-          <article class="card wide placeholder">
-            <h3>Exports as Share of Production — Top Exporters <span class="planned-tag">Planned</span></h3>
-          </article>
           <article class="card wide" id="exportComparisonWrap">
             <h3>Monthly Export Comparison</h3>
             <div class="sub">Million lb, US pork exports by month — a line per year (last 10), with 2026 (yellow) and 2025 (orange) highlighted against prior years.</div>
@@ -192,9 +179,14 @@
             <div class="sub">Million lb per quarter, stacked by product type (US Census, product weight).</div>
             <canvas id="importCutsChart"></canvas>
           </article>
+          <article class="card wide" id="exportShareCountriesWrap">
+            <h3>Exports as Share of Production — Top Exporters</h3>
+            <div class="sub">% of each country's pork production that is exported. USDA FAS PSD, annual (carcass-weight basis).</div>
+            <canvas id="exportShareCountriesChart"></canvas>
+          </article>
           <article class="card wide" id="forecastExportsWrap">
             <h3>Forecasted Exports</h3>
-            <div class="sub">USDA WASDE US pork export forecast, million lb. The most recent marketing year is the estimate; following years are projections.</div>
+            <div class="sub">Million lb per quarter. Solid = actual through Q2 2026; dotted = forecast (Q3 2026 on) — WASDE forecasts exports annually, split into quarters here by the recent seasonal pattern (estimated).</div>
             <canvas id="forecastExportsChart"></canvas>
           </article>
         </div>
@@ -229,7 +221,7 @@
           </article>
           <article class="card wide" id="spreadMergeTestWrap">
             <h3>Cutout Less Net Hog Price</h3>
-            <div class="sub">$/cwt — daily spread (light line) with a 30-day rolling average overlaid (bold navy).</div>
+            <div class="sub">$/cwt — daily spread (light line) with a 30-day rolling average overlaid (bold navy). This is the packer's daily gross margin on a carcass-weight basis (cutout minus net hog price); it is <em>not</em> directly comparable to the farm-to-wholesale band in the chart below, which is USDA ERS's modeled monthly spread per pound of retail product.</div>
             <canvas id="spreadMergeTestChart"></canvas>
           </article>
           <article class="card wide" id="primalsWrap">
@@ -242,12 +234,14 @@
             <div class="sub">$/lb, weighted featured price with FRED bacon proxy where available.</div>
             <canvas id="retailPriceChart"></canvas>
           </article>
-          <article class="card wide placeholder">
-            <h3>Farm-to-Wholesale-to-Retail Price Spread <span class="planned-tag">Planned</span></h3>
+          <article class="card wide" id="spreadDollarWrap">
+            <h3>Farm-to-Wholesale-to-Retail Price Spread</h3>
+            <div class="sub">Where each retail dollar of pork goes, $/lb (retail-weight basis). Net farm value (what the producer gets) + farm-to-wholesale spread (packer/processor) + wholesale-to-retail spread (retailer) = the retail price. USDA ERS Meat Price Spreads, monthly. Note: the farm-to-wholesale band here is ERS's modeled spread per pound of <em>retail</em> product, so it does not match the "Cutout Less Net Hog Price" chart above, which is the daily packer margin in $/cwt carcass weight.</div>
+            <canvas id="spreadDollarChart"></canvas>
           </article>
           <article class="card wide" id="forecastPriceWrap">
             <h3>Forecasted Price</h3>
-            <div class="sub">USDA WASDE national hog price forecast (barrows &amp; gilts), $/cwt. The most recent marketing year is the estimate; following years are projections.</div>
+            <div class="sub">$/cwt per quarter, barrows &amp; gilts. Solid = actual/estimate through Q2 2026; dotted = USDA WASDE forecast (Q3 2026 on).</div>
             <canvas id="forecastPriceChart"></canvas>
           </article>
         </div>
@@ -267,7 +261,7 @@
               <li>The US breeding herd has eased to ~5.89M head, down from ~6.02M two years ago — a slow, productivity-driven contraction rather than a culling spike. <a href="#herdBreedingMarketWrap">View chart →</a></li>
               <li>Pigs saved per litter has climbed to ~12.0, up from ~11.7 a year ago — more pigs from fewer sows is keeping output steady as the herd shrinks. <a href="#farrowComboTestWrap">View chart →</a></li>
               <li>The packer spread (cutout less net hog price) has compressed to just a few dollars per cwt recently — unusually thin processing margins. <a href="#spreadMergeTestWrap">View chart →</a></li>
-              <li>Exports now absorb ~26% of US pork production, with 2025 monthly volumes running above the prior-decade range. <a href="#exportShareWrap">View chart →</a></li>
+              <li>Exports now absorb ~26% of US pork production, with 2025 monthly volumes running above the prior-decade range. <a href="#exportShareCountriesWrap">View chart →</a></li>
               <li>Frozen pork stocks sit near 436M lb, ~4% below a year ago — leaner cold storage points to firm demand absorbing supply. <a href="#coldStorageWrap">View chart →</a></li>
             </ul>
           </article>
@@ -306,7 +300,7 @@
     </main>
   </div>
 </div>
-<script src="assets/dashboard-common.js?v=20260625m"></script>
-<script src="assets/pork-dashboard.js?v=20260625m"></script>
+<script src="assets/dashboard-common.js?v=20260625y"></script>
+<script src="assets/pork-dashboard.js?v=20260625y"></script>
 </body>
 </html>
