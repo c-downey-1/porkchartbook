@@ -256,6 +256,30 @@ def _git(args, check=False):
     )
 
 
+def _sync_with_origin():
+    """Pull origin/main before building so the data commit lands on top of the
+    latest (e.g. frontend) work and the later push fast-forwards instead of
+    failing non-fast-forward.
+
+    docs/data.json is a regenerated artifact: if a prior run committed it but
+    couldn't push (diverging the branch), those local-ahead commits are safe to
+    discard and rebuild on top of origin. We only auto-reset when every
+    local-ahead change is docs/data.json; anything else is left for a human.
+    Returns a short status note (None == cleanly synced).
+    """
+    if _git(["fetch", "origin", "main"]).returncode != 0:
+        return "fetch failed; building on local HEAD"
+    # Up to date or simply behind → fast-forward.
+    if _git(["merge", "--ff-only", "origin/main"]).returncode == 0:
+        return None
+    # Diverged. Inspect what the local-ahead commits actually touched.
+    changed = _git(["diff", "--name-only", "origin/main...HEAD"]).stdout.split()
+    if changed and all(path == DATA_JSON_REL for path in changed):
+        _git(["reset", "--hard", "origin/main"])
+        return "reset stale local data.json commit onto origin"
+    return f"diverged with non-data commits ({', '.join(changed) or '?'}); manual reconcile needed"
+
+
 def _commit_and_push(date_str, no_push=False):
     """Commit docs/data.json ONLY, optionally push.
 
@@ -323,7 +347,15 @@ def run(dry_run=False, no_push=False, no_email=False, db_path=None):
         "commit": None,
         "diff_stat": "",
         "dry_run": dry_run,
+        "sync_note": None,
     }
+
+    # Pull origin/main up front (unless this is a dry run that must not touch the
+    # tree) so the data commit builds on the latest and pushes cleanly.
+    if not dry_run:
+        report["sync_note"] = _sync_with_origin()
+        if report["sync_note"]:
+            print(f"\n[sync] {report['sync_note']}")
 
     try:
         for src in SOURCES:

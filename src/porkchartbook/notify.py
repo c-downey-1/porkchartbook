@@ -117,6 +117,8 @@ def build_summary(report):
         lines.append("Status: data.json rebuilt; NOT pushed (see errors / --no-push).")
     else:
         lines.append("Status: no data changed; nothing rebuilt or pushed.")
+    if report.get("sync_note"):
+        lines.append(f"Sync: {report['sync_note']}")
     lines.append("")
 
     # Flagged long-term updates — the part Casey most wants surfaced.
