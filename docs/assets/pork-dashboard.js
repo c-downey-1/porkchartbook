@@ -1665,7 +1665,7 @@ function buildPriceSpread(ps) {
 // Google Apps Script web-app endpoint backing the signup form. The body is sent
 // as a JSON string with NO Content-Type header so it stays a "simple" CORS
 // request (no preflight) — Apps Script reads it via e.postData.contents.
-const SIGNUP_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwUoiefUie0sk3DfKxq6lCWaXUNSIjMIJxu4PAY4i2QhihPSz2muCgMOfBRHJEKuexjrw/exec';
+const SIGNUP_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyNVCUxSU6np6gCp9OgQPst3uxhSyvuC1dzUEEj3iVC1oz4yjB7ZOfvA2KlPsHMJ3U/exec';
 
 function initMonthlySignup(data) {
   const form = document.getElementById('dashboardSignupForm');
