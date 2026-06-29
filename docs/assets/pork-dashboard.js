@@ -1662,16 +1662,44 @@ function buildPriceSpread(ps) {
   });
 }
 
+// Google Apps Script web-app endpoint backing the signup form. The body is sent
+// as a JSON string with NO Content-Type header so it stays a "simple" CORS
+// request (no preflight) — Apps Script reads it via e.postData.contents.
+const SIGNUP_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwUoiefUie0sk3DfKxq6lCWaXUNSIjMIJxu4PAY4i2QhihPSz2muCgMOfBRHJEKuexjrw/exec';
+
 function initMonthlySignup(data) {
   const form = document.getElementById('dashboardSignupForm');
   const status = document.getElementById('dashboardSignupStatus');
   if (!form || !status) return;
-  const enabled = !!data.meta?.monthly_updates?.enabled;
+
+  const setStatus = text => { status.textContent = text || ''; };
+  Array.from(form.querySelectorAll('input')).forEach(input =>
+    input.addEventListener('input', () => setStatus('')));
+
   form.addEventListener('submit', event => {
     event.preventDefault();
-    status.textContent = enabled
-      ? 'Thanks. You are on the pork chartbook update list.'
-      : 'Signup capture is designed and ready to connect to the preferred backend.';
+    if (!form.reportValidity()) return;
+
+    const payload = {
+      firstName: form.elements.first_name?.value?.trim() || '',
+      lastName: form.elements.last_name?.value?.trim() || '',
+      email: form.elements.email?.value?.trim() || '',
+      company: form.elements.company?.value?.trim() || '',
+      role: form.elements.role?.value?.trim() || '',
+    };
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    setStatus('Submitting…');
+
+    fetch(SIGNUP_ENDPOINT, { method: 'POST', body: JSON.stringify(payload) })
+      .then(response => {
+        if (!response.ok) throw new Error('Network error');
+        setStatus('Thank you! You are on the pork chartbook update list.');
+        form.reset();
+      })
+      .catch(() => setStatus('Something went wrong. Please try again.'))
+      .finally(() => { if (submitBtn) submitBtn.disabled = false; });
   });
 }
 
