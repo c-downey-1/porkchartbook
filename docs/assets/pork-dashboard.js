@@ -271,9 +271,9 @@ function setPorkChartSources() {
     marketWeightChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     sowsFarrowedChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     farrowComboTestChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
-    slaughterHeadChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
-    porkProductionChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
-    carcassWeightChart: `Chart: Innovate Animal Ag • Source: ${amsHg}`,
+    slaughterHeadChart: `Chart: Innovate Animal Ag • Source: ${amsHg} • Covered packers ≈ 95% of federally inspected barrow & gilt slaughter`,
+    porkProductionChart: `Chart: Innovate Animal Ag • Source: ${amsHg} • Covered packers ≈ 95% of federally inspected barrow & gilt slaughter`,
+    carcassWeightChart: `Chart: Innovate Animal Ag • Source: ${amsHg} • Covered packers ≈ 95% of federally inspected barrow & gilt slaughter`,
     commercialSlaughterChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     productionSeasonalChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
     sowSlaughterChart: `Chart: Innovate Animal Ag • Source: ${nass}`,
@@ -770,7 +770,7 @@ function buildNassSlaughter(sp) {
     registerRangeControl({
       chartId: 'sowSlaughterChart',
       options: ['1y', '2y', '3y', '5y', '10y', 'all'],
-      defaultRange: '5y',
+      defaultRange: '1y',
       renderer(range) {
         const { start, end } = getRangeSlice(dates, range);
         const labels = dates.slice(start, end);
@@ -913,11 +913,25 @@ function buildRetailDemand(retail) {
           'retailFeatureChart',
           labels,
           [
-            dataset('Feature rate', labels.map(d => featureMap[d] ?? null), C.teal),
+            dataset('Feature rate', labels.map(d => featureMap[d] != null ? featureMap[d] * 100 : null), C.teal),
             dataset('Activity index', labels.map(d => activityMap[d] ?? null), C.gold, { yAxisID: 'y2' }),
           ],
-          'Feature rate',
-          { y2: 'Activity index', aspect: 2.6 }
+          'Feature rate (%)',
+          {
+            y2: 'Activity index', aspect: 2.6,
+            yTickCallback: v => `${v}%`,
+            tooltip: {
+              callbacks: {
+                label(ctx) {
+                  const v = Number(ctx.parsed.y);
+                  if (!Number.isFinite(v)) return ctx.dataset.label || '';
+                  return ctx.dataset.label === 'Feature rate'
+                    ? `Feature rate: ${fmtNum(v, 1)}%`
+                    : `${ctx.dataset.label}: ${fmtNum(v, 1)}`;
+                }
+              }
+            }
+          }
         );
       }
     });
@@ -1710,10 +1724,12 @@ function buildExportShareByCountry(world) {
   const chartId = 'exportShareCountriesChart';
   if (!world || !world.export_share || !(world.years || []).length) { hideEmptyCard(chartId); return; }
   const years = world.years.map(String);
+  // US and Brazil keep the same colors as the "Pork Exports: US vs. Brazil"
+  // chart (US teal, Brazil navy); other regions use distinct colors.
   const picks = [
-    ['United States', C.navy],
-    ['European Union', C.teal],
-    ['Brazil', C.orange],
+    ['United States', C.teal],
+    ['European Union', C.orange],
+    ['Brazil', C.navy],
     ['Canada', C.gold],
   ].filter(([c]) => world.export_share[c]);
   const N = { '10y': 10, all: 9999 };
