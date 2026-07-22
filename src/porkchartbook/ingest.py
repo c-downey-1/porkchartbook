@@ -468,16 +468,18 @@ def ingest_ers_price_spreads(conn):
 
 
 def ingest_psd(conn):
-    """Fetch FAS PSD world pork production & exports by country (annual)."""
+    """Fetch FAS PSD world pork production & exports by country (annual).
+
+    A fetch failure is allowed to propagate so the orchestrator records it as a
+    real error and flags it in the summary email, instead of being swallowed and
+    reported as a clean "no new rows" while the dataset silently goes stale.
+    """
     print(f"\n{'=' * 60}")
     print("  USDA FAS PSD — World pork production & exports by country")
     print(f"{'=' * 60}")
-    try:
-        rows = psd_client.fetch_pork_psd()
-    except Exception as exc:
-        print(f"  PSD fetch failed: {exc}")
-        return 0
+    rows = psd_client.fetch_pork_psd()
     if not rows:
+        print("  FAS PSD complete: 0 rows (no pork records found)")
         return 0
     count = db.upsert_rows(conn, "fas_psd_pork", rows)
     years = [str(r["market_year"]) for r in rows if r.get("market_year")]

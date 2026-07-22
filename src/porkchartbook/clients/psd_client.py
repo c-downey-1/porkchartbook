@@ -20,7 +20,6 @@ from __future__ import annotations
 import csv
 import io
 import zipfile
-from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -41,7 +40,17 @@ def _safe_float(value):
 
 
 def _request_bytes(url):
-    request = Request(url, headers={"User-Agent": "porkchartbook/1.0", "Accept": "application/zip"})
+    # apps.fas.usda.gov sits behind a WAF that 406s a non-browser User-Agent, and
+    # it serves the bundle as application/x-zip-compressed — so a strict
+    # "Accept: application/zip" also 406s on content negotiation. A browser-like
+    # UA plus a permissive Accept is what the server actually honors.
+    request = Request(url, headers={
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+    })
     with urlopen(request, timeout=120) as response:
         return response.read()
 
@@ -50,24 +59,17 @@ def fetch_pork_psd(zip_bytes=None):
     """Fetch and parse FAS PSD pork production & exports by country.
 
     Returns a flat list of rows ready for db.upsert_rows into fas_psd_pork.
-    Returns [] on fetch failure.
+    Raises on a fetch/unzip failure (rather than returning []) so the
+    orchestrator records it as a real error and flags it in the summary email
+    instead of silently reporting "no new rows" while the dataset goes stale.
     """
-    try:
-        raw = zip_bytes if zip_bytes is not None else _request_bytes(PSD_ZIP_URL)
-    except (HTTPError, URLError, Exception) as exc:
-        print(f"  [PSD] fetch failed: {exc}")
-        return []
+    raw = zip_bytes if zip_bytes is not None else _request_bytes(PSD_ZIP_URL)
 
-    try:
-        with zipfile.ZipFile(io.BytesIO(raw)) as bundle:
-            csv_name = next((n for n in bundle.namelist() if n.lower().endswith(".csv")), None)
-            if not csv_name:
-                print("  [PSD] no CSV found in bundle")
-                return []
-            text = bundle.read(csv_name).decode("utf-8", "replace")
-    except (zipfile.BadZipFile, Exception) as exc:
-        print(f"  [PSD] unzip/parse failed: {exc}")
-        return []
+    with zipfile.ZipFile(io.BytesIO(raw)) as bundle:
+        csv_name = next((n for n in bundle.namelist() if n.lower().endswith(".csv")), None)
+        if not csv_name:
+            raise ValueError("PSD bundle contained no CSV file")
+        text = bundle.read(csv_name).decode("utf-8", "replace")
 
     rows = []
     for record in csv.DictReader(text.splitlines()):
