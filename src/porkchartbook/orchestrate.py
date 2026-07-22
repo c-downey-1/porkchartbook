@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import socket
 import subprocess
 import sys
 from datetime import date
@@ -42,6 +43,13 @@ from .paths import DEFAULT_DB_PATH, DOCS_ROOT, REPO_ROOT
 
 DATA_JSON_REL = "docs/data.json"
 LOCK_PATH = REPO_ROOT / ".orchestrate.lock"
+
+# Watchdog: cap any single blocking socket read so a stalled upstream (the
+# July 2026 hang was a gov-host read that never returned) raises instead of
+# hanging forever. This bounds each recv, not the whole transfer, so large
+# backfills that keep making progress are unaffected. Per-source isolation
+# then logs the timeout as that source's error and the run still completes.
+socket.setdefaulttimeout(120)
 
 
 # ── Source manifest ─────────────────────────────────────────────────────────
@@ -314,14 +322,54 @@ def _commit_and_push(date_str, no_push=False):
 
 # ── Lock ─────────────────────────────────────────────────────────────────--
 
-def _acquire_lock():
+def _lock_is_stale():
+    """True if the lock file names a PID that is no longer running.
+
+    A run that dies hard (SIGKILL, machine sleep, power loss) never reaches its
+    `finally: _release_lock()`, so it orphans the lock file. Without this check
+    that orphan wedges every future run — exactly what silently stalled this
+    pipeline for 11 days in July 2026.
+    """
     try:
-        fd = os.open(str(LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.write(fd, str(os.getpid()).encode())
-        os.close(fd)
+        raw = LOCK_PATH.read_text().strip()
+    except (FileNotFoundError, OSError):
+        return True  # vanished or unreadable — treat as stale and retry
+    if not raw:
+        return True  # empty / partial write from a crash mid-creation
+    try:
+        pid = int(raw)
+    except ValueError:
+        return True  # garbage contents — stale
+    if pid <= 0:
         return True
-    except FileExistsError:
-        return False
+    try:
+        os.kill(pid, 0)  # signal 0 = liveness probe; delivers nothing
+    except ProcessLookupError:
+        return True   # no such process — stale
+    except PermissionError:
+        return False  # alive but owned by another user — assume a real run
+    return False      # process is alive — a genuine concurrent run
+
+
+def _acquire_lock():
+    """Acquire the run lock, reclaiming it once if the holder is dead.
+
+    On a name collision we read the owning PID and, if that process is gone,
+    remove the orphaned lock and retry a single time. Two live racers still
+    resolve safely: the O_EXCL re-create lets only one win.
+    """
+    for attempt in range(2):
+        try:
+            fd = os.open(str(LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return True
+        except FileExistsError:
+            if attempt == 0 and _lock_is_stale():
+                _release_lock()
+                continue
+            return False
+    return False
 
 
 def _release_lock():
