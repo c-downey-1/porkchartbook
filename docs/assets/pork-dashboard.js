@@ -1076,10 +1076,19 @@ function buildInventoryTrade(inventoryTrade) {
     const qRep = m => `${m.slice(0, 4)}-${String(Math.ceil(Number(m.slice(5, 7)) / 3) * 3).padStart(2, '0')}`;
     const usMonthMap = Object.fromEntries(usPw.dates.map((d, i) => [d, usPw.values[i]]));
     const monthlyDates = [...new Set([...(usPw.dates || []), ...(brazilTotal.dates || [])])].sort();
-    const qMonthCount = {};
-    monthlyDates.forEach(m => { const q = qRep(m); qMonthCount[q] = (qMonthCount[q] || 0) + 1; });
     const quarterDates = [...new Set(monthlyDates.map(qRep))].sort();
-    if (quarterDates.length && qMonthCount[quarterDates[quarterDates.length - 1]] < 3) quarterDates.pop();
+    // Trim trailing quarters that aren't fully reported in BOTH plotted series.
+    // The two sources release on different cadences (US Census trade lags
+    // Brazil's Comex by ~a month), so counting months across the union would
+    // keep a quarter that's complete for Brazil but missing a US month —
+    // plotting a 2-month US sum as a full quarter and drawing a false cliff.
+    // Require 3 months in each series independently.
+    const monthsInQuarter = (dates, q) => (dates || []).filter(m => qRep(m) === q).length;
+    while (quarterDates.length) {
+      const last = quarterDates[quarterDates.length - 1];
+      if (monthsInQuarter(usPw.dates, last) < 3 || monthsInQuarter(brazilTotal.dates, last) < 3) quarterDates.pop();
+      else break;
+    }
     const qIndex = Object.fromEntries(quarterDates.map((q, i) => [q, i]));
     const aggregate = monthMap => {
       const arr = quarterDates.map(() => null);
