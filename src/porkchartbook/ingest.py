@@ -447,23 +447,51 @@ def ingest_wasde(conn):
     return count
 
 
+# ERS publishes each month's price spreads a few weeks into the following
+# month, so one to two months of lag is normal. Beyond this the source has
+# stopped moving and we want to hear about it — a frozen URL previously kept
+# this series stuck on Dec 2025 for eight months while every run reported "ok".
+SPREADS_MAX_LAG_MONTHS = 4
+
+
+def _months_behind(report_month, today=None):
+    """Whole months between report_month ("YYYY-MM") and the current month."""
+    today = today or date.today()
+    year, month = (int(part) for part in report_month.split("-")[:2])
+    return (today.year - year) * 12 + (today.month - month)
+
+
 def ingest_ers_price_spreads(conn):
-    """Fetch ERS Meat Price Spreads for pork (monthly farm/wholesale/retail)."""
+    """Fetch ERS Meat Price Spreads for pork (monthly farm/wholesale/retail).
+
+    A fetch failure, an empty parse, or a source that has stopped publishing all
+    raise, so the orchestrator records a real error and flags it in the summary
+    email instead of upserting nothing and leaving stale data in place.
+    """
     print(f"\n{'=' * 60}")
     print("  ERS Meat Price Spreads — pork farm/wholesale/retail values")
     print(f"{'=' * 60}")
-    try:
-        rows = ers_price_spreads_client.fetch_pork_spreads()
-    except Exception as exc:
-        print(f"  ERS price spreads fetch failed: {exc}")
-        return 0
-    if not rows:
-        return 0
+    rows = ers_price_spreads_client.fetch_pork_spreads()
     count = db.upsert_rows(conn, "ers_price_spreads", rows)
     months = [r["report_month"] for r in rows if r.get("report_month")]
     if months:
         db.log_fetch(conn, "ers_price_spreads", min(months), max(months), count, data_item="pork")
     print(f"  ERS price spreads complete: {count:,} rows")
+
+    latest = max(months, default=None)
+    if latest is None:
+        raise ers_price_spreads_client.SpreadsFetchError(
+            "ERS price spreads returned rows with no report_month"
+        )
+    lag = _months_behind(latest)
+    if lag > SPREADS_MAX_LAG_MONTHS:
+        raise ers_price_spreads_client.SpreadsFetchError(
+            f"ERS price spreads look frozen: newest month is {latest}, "
+            f"{lag} months behind {date.today():%Y-%m} "
+            f"(limit {SPREADS_MAX_LAG_MONTHS}). Check whether ERS moved the CSVs "
+            f"on https://www.ers.usda.gov/data-products/meat-price-spreads"
+        )
+    print(f"  ERS price spreads latest month: {latest} ({lag} month(s) behind)")
     return count
 
 
