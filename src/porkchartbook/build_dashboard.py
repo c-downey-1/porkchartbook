@@ -9,11 +9,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
 from . import db
 from .paths import DOCS_ROOT
+
+# Degradations that still yield a usable data.json but quietly change what the
+# charts show — e.g. falling back to a coarser series when a source is
+# unreachable. Collected here so the orchestrator can put them in the daily
+# email: a silently swapped series is the same class of failure as a frozen
+# source, and just as invisible. Reset at the top of build_data_json.
+BUILD_WARNINGS = []
 
 
 DATA_JSON_PATH = DOCS_ROOT / "data.json"
@@ -1087,6 +1095,8 @@ def build_inventory_trade(conn, slaughter_production):
 # Public CME-derived feed Google Sheet shared with the egg chartbook. Columns:
 # corn date (0), corn cents/bushel (1), corn $/ton (3), soy date (5), soy $/ton (6).
 FEED_SHEET_ID = "11x-7f68LiFCCItwY6qjgcWmgosPSY2sKXax1vorYDO4"
+FEED_SHEET_ATTEMPTS = 3
+FEED_SHEET_RETRY_SECONDS = 5
 
 
 def _safe_sheet_float(value):
@@ -1119,12 +1129,32 @@ def _fetch_feed_sheet_daily():
     from urllib.request import Request, urlopen
 
     url = f"https://docs.google.com/spreadsheets/d/{FEED_SHEET_ID}/export?format=csv&gid=0"
-    try:
-        req = Request(url, headers={"User-Agent": "porkchartbook/1.0"})
-        with urlopen(req, timeout=60) as response:
-            text = response.read().decode("utf-8", errors="replace").lstrip("﻿")
-    except Exception as exc:  # noqa: BLE001 - network/CSV issues should degrade gracefully
-        print(f"  [feed sheet] fetch failed, skipping corn/soy input indices: {exc}")
+    # Retry: the observed failure mode is a transient read timeout, and the
+    # cost of giving up is a visibly different chart (see the warning below).
+    text = None
+    last_exc = None
+    for attempt in range(FEED_SHEET_ATTEMPTS):
+        try:
+            req = Request(url, headers={"User-Agent": "porkchartbook/1.0"})
+            with urlopen(req, timeout=60) as response:
+                text = response.read().decode("utf-8", errors="replace").lstrip("﻿")
+            break
+        except Exception as exc:  # noqa: BLE001 - network/CSV issues degrade gracefully
+            last_exc = exc
+            print(f"  [feed sheet] attempt {attempt + 1}/{FEED_SHEET_ATTEMPTS} failed: {exc}")
+            if attempt + 1 < FEED_SHEET_ATTEMPTS:
+                time.sleep(FEED_SHEET_RETRY_SECONDS * (attempt + 1))
+    if text is None:
+        # Loud, because the fallback is not equivalent: the chart drops from
+        # ~1000 daily $/ton points to ~400 monthly $/metric-ton ones, and the
+        # unit label changes with it.
+        warning = (
+            f"CME feed sheet unreachable after {FEED_SHEET_ATTEMPTS} attempts "
+            f"({last_exc}); corn/soy charts fell back to the coarser FRED "
+            f"monthly $/metric-ton series"
+        )
+        print(f"  [feed sheet] {warning}")
+        BUILD_WARNINGS.append(warning)
         return {}, {}
 
     corn_by_date = {}
@@ -1462,6 +1492,7 @@ def build_kpi(snapshot):
 
 
 def build_data_json(conn):
+    BUILD_WARNINGS.clear()
     herd = build_herd_supply(conn)
     slaughter = build_slaughter_production(conn)
     prices = build_prices(conn)

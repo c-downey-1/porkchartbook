@@ -30,6 +30,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
 import os
 import re
@@ -66,6 +67,13 @@ socket.setdefaulttimeout(120)
 #             cheap) and change is detected purely from the row delta.
 # fingerprint list of (table, date_col, where) summed/maxed before & after
 #             ingest to measure what actually landed.
+# max_lag_days how far behind today the newest row may fall before the source
+#             is treated as stale. This is the backstop for the failure mode a
+#             per-client error check cannot see: the fetch succeeds, parses
+#             cleanly and reports "ok" while the upstream file has quietly
+#             stopped being updated. That is exactly how ERS Meat Price Spreads
+#             sat on Dec 2025 for eight months, and how the WASDE URL change
+#             went unnoticed for four weeks. None disables the check.
 
 SOURCES = [
     {
@@ -76,6 +84,8 @@ SOURCES = [
         "probe": None,
         "ingest": ingest.update_ams,
         "fingerprint": [("ams_hog_prices", "report_date", None)],
+        # daily; covers long holiday weekends (typ. 1d)
+        "max_lag_days": 10,
     },
     {
         "key": "fred",
@@ -85,6 +95,8 @@ SOURCES = [
         "probe": None,
         "ingest": ingest.backfill_fred,
         "fingerprint": [("fred_series", "observation_date", None)],
+        # daily-ish release cadence (typ. 3d)
+        "max_lag_days": 14,
     },
     {
         "key": "ams_retail",
@@ -94,6 +106,8 @@ SOURCES = [
         "probe": None,  # MyMarketNews endpoint is cheap; fetch + detect delta
         "ingest": ingest.update_retail,
         "fingerprint": [("retail_metrics", "report_date", None)],
+        # weekly report (typ. 10d)
+        "max_lag_days": 24,
     },
     {
         "key": "comex",
@@ -103,6 +117,8 @@ SOURCES = [
         "probe": None,  # API call is the fetch; detect delta
         "ingest": ingest.update_comexstat,
         "fingerprint": [("comexstat_pork_exports", "report_month", "flow = 'export'")],
+        # monthly, ~1 month lag (typ. 26d)
+        "max_lag_days": 75,
     },
     {
         "key": "census_trade",
@@ -112,6 +128,8 @@ SOURCES = [
         "probe": None,  # API call is the fetch; detect delta (no-ops without key)
         "ingest": ingest.update_census,
         "fingerprint": [("census_pork_trade", "report_month", "flow = 'export'")],
+        # monthly, ~2 month lag (typ. 57d)
+        "max_lag_days": 110,
     },
     {
         "key": "ers_food_avail",
@@ -121,6 +139,9 @@ SOURCES = [
         "probe": None,  # cheap CSV; detect new year from the row delta
         "ingest": ingest.ingest_ers_food_availability,
         "fingerprint": [("ers_food_availability", "year", "commodity = 'pork'")],
+        # annual, and ERS itself ended the series at
+        # 2021 — an absolute-lag guard would alarm forever
+        "max_lag_days": None,
     },
     {
         "key": "wasde",
@@ -130,6 +151,10 @@ SOURCES = [
         "probe": None,  # small monthly text file; detect new vintage from the delta
         "ingest": ingest.ingest_wasde,
         "fingerprint": [("wasde_forecasts", "report_month", None)],
+        # monthly vintage, published ~12th; worst legitimate
+        # lag is ~14d, so 45 leaves headroom and still
+        # catches a missed report within the month
+        "max_lag_days": 45,
     },
     {
         "key": "fas_psd",
@@ -139,6 +164,8 @@ SOURCES = [
         "probe": None,  # ~1 MB bulk CSV; detect a new market year from the delta
         "ingest": ingest.ingest_psd,
         "fingerprint": [("fas_psd_pork", "market_year", None)],
+        # annual; market_year is future-dated
+        "max_lag_days": 400,
     },
     {
         "key": "ers_price_spreads",
@@ -148,6 +175,8 @@ SOURCES = [
         "probe": None,  # monthly CSV; detect a new month from the delta
         "ingest": ingest.ingest_ers_price_spreads,
         "fingerprint": [("ers_price_spreads", "report_month", None)],
+        # monthly, ~1 month lag (typ. 26d)
+        "max_lag_days": 75,
     },
     {
         "key": "nass",
@@ -157,6 +186,8 @@ SOURCES = [
         "probe": probes.nass_probe,
         "ingest": ingest.update_nass,
         "fingerprint": [("nass_data", "load_time", None)],
+        # load_time of the most recent NASS refresh
+        "max_lag_days": 14,
     },
     {
         "key": "ers_trade",
@@ -169,6 +200,8 @@ SOURCES = [
             ("ers_trade_totals", "report_month", "commodity = 'pork'"),
             ("ers_trade_partner_country", "report_month", "commodity = 'pork'"),
         ],
+        # monthly, ~2 month lag (typ. 57d)
+        "max_lag_days": 110,
     },
 ]
 
@@ -185,6 +218,50 @@ def _fingerprint(conn, specs):
         if mx is not None and (max_date is None or str(mx) > str(max_date)):
             max_date = mx
     return (total, max_date)
+
+
+# ── Staleness ────────────────────────────────────────────────────────────--
+
+def _latest_as_date(value):
+    """The date a fingerprint's newest value covers *through*.
+
+    Fingerprint columns are deliberately heterogeneous — YYYY for annual
+    sources, YYYY-MM for monthly ones, YYYY-MM-DD or a full timestamp for daily
+    ones. Resolving to the end of the covered period keeps a monthly series from
+    looking a month stale the day its month closes. Returns None if unparseable.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        if len(text) == 4:                     # YYYY  -> Dec 31
+            return date(int(text), 12, 31)
+        if len(text) == 7 and text[4] == "-":  # YYYY-MM -> last day of month
+            year, month = int(text[:4]), int(text[5:7])
+            return date(year, month, calendar.monthrange(year, month)[1])
+        return date(int(text[:4]), int(text[5:7]), int(text[8:10]))
+    except (ValueError, IndexError):
+        return None
+
+
+def _staleness_error(src, latest_date):
+    """Error string when a source's newest row is older than its allowed lag.
+
+    Deliberately independent of whether the ingest raised: the failure this
+    catches is a clean, successful fetch of a file nobody is updating any more.
+    """
+    max_lag = src.get("max_lag_days")
+    if max_lag is None:
+        return None
+    covered = _latest_as_date(latest_date)
+    if covered is None:
+        return f"no dated rows found (latest={latest_date!r}); cannot confirm freshness"
+    lag = (date.today() - covered).days
+    if lag <= max_lag:
+        return None
+    return (f"data ends {latest_date} — {lag} days stale, limit {max_lag}. "
+            f"The fetch reported success, so the upstream file has most likely "
+            f"moved or stopped being updated.")
 
 
 # ── Per-source run ───────────────────────────────────────────────────────--
@@ -240,6 +317,10 @@ def _run_source(conn, src):
     if not should_ingest:
         result["action"] = "skipped"
         result["latest_date"] = before[1]
+        # A source can also go stale while being skipped every day because its
+        # probe keeps reporting "unchanged" — which is what a frozen file looks
+        # like from the outside.
+        result["error"] = result["error"] or _staleness_error(src, before[1])
         return result
 
     try:
@@ -257,6 +338,7 @@ def _run_source(conn, src):
     result["new_rows"] = max(0, after[0] - before[0])
     result["changed"] = after != before
     result["latest_date"] = after[1]
+    result["error"] = result["error"] or _staleness_error(src, after[1])
     return result
 
 
@@ -513,6 +595,16 @@ def run(dry_run=False, no_push=False, no_email=False, db_path=None):
                 report["build_ok"] = False
                 report["build_note"] = str(exc)
                 print(f"  BUILD FAILED: {exc}", file=sys.stderr)
+
+            # A build can succeed while quietly substituting a coarser series for
+            # one it could not fetch. Surface those the same way source errors are
+            # surfaced, so the email says so instead of looking clean.
+            for warning in build_dashboard.BUILD_WARNINGS:
+                report["sources"].append({
+                    "key": "build", "label": "Dashboard build", "label_short": "build",
+                    "tier": "daily", "action": "error", "new_rows": 0,
+                    "changed": False, "latest_date": None, "note": "", "error": warning,
+                })
 
             if report["build_ok"] and not dry_run:
                 committed, commit_hash, diff_stat, git_err = _commit_and_push(date_str, no_push=no_push)

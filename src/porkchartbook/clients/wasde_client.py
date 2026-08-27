@@ -31,8 +31,11 @@ from urllib.request import Request, urlopen
 
 BASE_URL = "https://www.usda.gov/oce/commodity/wasde"
 
-# Released reports use the "v2" suffix; v1/v3 are tried as a fallback.
-VERSIONS = ("v2", "v1", "v3")
+# USDA dropped the version suffix sometime after the June 2026 report: the
+# current files are plain wasde<MMYY>.txt and every suffixed name now 404s,
+# including previously-fetched ones. Try bare first, then the old v2/v1/v3
+# spellings so older vintages still resolve.
+VERSIONS = ("", "v2", "v1", "v3")
 
 # Commodity headers that mark the end of the Pork block in the meats table.
 _MEATS_STOP = {"TotalRed", "Meat5/", "Beef", "Broiler", "Turkey", "Lamb", "Veal"}
@@ -59,7 +62,7 @@ def _safe_float(token):
 
 def _candidate_files(today=None):
     """Yield (url, report_month_iso, month_abbr) for the current and previous
-    month, each with the v2/v1/v3 suffixes."""
+    month, each with the unsuffixed and legacy v2/v1/v3 spellings."""
     today = today or date.today()
     year, month = today.year, today.month
     for _ in range(2):  # current month, then previous
