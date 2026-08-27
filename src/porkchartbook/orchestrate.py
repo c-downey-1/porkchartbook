@@ -13,7 +13,9 @@ update_pork_chartbook.sh:
          are fetched directly and change is detected from row deltas.
      Each source runs isolated — one failure never aborts the others.
   2. If any source produced new/updated data, rebuild docs/data.json,
-     commit it, and push to GitHub.
+     commit it, and push to GitHub, then wait for GitHub Pages to actually
+     republish (a push can succeed while the deploy fails, silently stranding
+     the live site on old data).
   3. Email a summary every run: what updated, long-term changes flagged,
      and any errors (pulled from this run's results + etl_log).
 
@@ -28,10 +30,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import socket
 import subprocess
 import sys
+import time
 from datetime import date
 
 from . import build_dashboard
@@ -320,6 +325,89 @@ def _commit_and_push(date_str, no_push=False):
     return (True, commit_hash, diff_stat, None)
 
 
+# ── GitHub Pages publish check ───────────────────────────────────────────────
+#
+# A successful `git push` only means the commit reached main. The Pages build
+# and deploy run afterwards, out of band, and can fail on their own — so the
+# live site can go stale while this job reports a clean run. That happened on
+# 2026-08-06: a green build was followed by a deploy that sat in
+# `deployment_queued` for ten minutes and self-cancelled, leaving
+# pork.innovateanimalag.org serving data three days old with no warning.
+
+PAGES_POLL_SECONDS = 15
+PAGES_TIMEOUT_SECONDS = 600   # matches GitHub's own deploy-step timeout
+
+
+def _remote_slug():
+    """(owner, repo) parsed from origin's URL, or None if it isn't GitHub."""
+    url = _git(["remote", "get-url", "origin"]).stdout.strip()
+    m = re.search(r"github\.com[:/]+([^/]+?)/(.+?)(?:\.git)?/?$", url)
+    return (m.group(1), m.group(2)) if m else None
+
+
+def _gh_api(path, owner):
+    """`gh api <path>`, authenticated as `owner`. Returns parsed JSON.
+
+    The account is pinned by name and the token read live from the gh keyring —
+    same contract as this repo's credential helper, so the check does not depend
+    on which gh account happens to be *active* (that flipping to the wrong
+    account is what broke the daily push on 2026-08-04). Raises RuntimeError
+    carrying gh's own message when the call fails.
+    """
+    env = dict(os.environ)
+    tok = subprocess.run(["gh", "auth", "token", "--user", owner],
+                         capture_output=True, text=True)
+    if tok.returncode == 0 and tok.stdout.strip():
+        env["GH_TOKEN"] = tok.stdout.strip()
+    res = subprocess.run(["gh", "api", path], capture_output=True, text=True, env=env)
+    if res.returncode != 0:
+        raise RuntimeError(res.stderr.strip() or res.stdout.strip() or "gh api failed")
+    return json.loads(res.stdout)
+
+
+def _verify_pages_publish(commit_hash):
+    """Block until GitHub Pages publishes `commit_hash`. Returns None on success,
+    else an error string suitable for the ⚠️ section of the daily email.
+
+    Polls the legacy Pages build record until it leaves queued/building. We wait
+    for the build whose commit matches ours: immediately after a push the
+    "latest" build is still the *previous* one, and accepting it would report a
+    stale success — the precise blind spot this check exists to close.
+    """
+    slug = _remote_slug()
+    if slug is None:
+        return "could not verify Pages publish: origin is not a GitHub remote"
+    owner, repo = slug
+    endpoint = f"repos/{owner}/{repo}/pages/builds/latest"
+
+    deadline = time.monotonic() + PAGES_TIMEOUT_SECONDS
+    last_status = "unknown"
+    while time.monotonic() < deadline:
+        try:
+            build = _gh_api(endpoint, owner)
+        except (RuntimeError, json.JSONDecodeError) as exc:
+            # Can't see the deploy => can't claim it worked. Surfacing this is
+            # the point; a silent "assume fine" is the bug we're fixing.
+            return f"could not verify Pages publish: {exc}"
+
+        status = build.get("status") or "unknown"
+        sha = build.get("commit") or ""
+        ours = bool(commit_hash) and sha.startswith(commit_hash)
+
+        if ours and status == "built":
+            print(f"  Pages published {sha[:7]}")
+            return None
+        if ours and status not in ("queued", "building"):
+            msg = ((build.get("error") or {}).get("message") or "").strip()
+            return f"Pages build {status} for {sha[:7]}" + (f": {msg}" if msg else "")
+
+        last_status = f"{status} (commit {sha[:7] or '?'})" if not ours else status
+        time.sleep(PAGES_POLL_SECONDS)
+
+    return (f"Pages publish not confirmed within {PAGES_TIMEOUT_SECONDS // 60} min "
+            f"(last status: {last_status}); site may be serving stale data")
+
+
 # ── Lock ─────────────────────────────────────────────────────────────────--
 
 def _lock_is_stale():
@@ -396,6 +484,7 @@ def run(dry_run=False, no_push=False, no_email=False, db_path=None):
         "diff_stat": "",
         "dry_run": dry_run,
         "sync_note": None,
+        "pages_ok": None,   # None = not applicable (nothing pushed this run)
     }
 
     # Pull origin/main up front (unless this is a dry run that must not touch the
@@ -436,6 +525,20 @@ def run(dry_run=False, no_push=False, no_email=False, db_path=None):
                         "tier": "daily", "action": "error", "new_rows": 0,
                         "changed": False, "latest_date": None, "note": "", "error": git_err,
                     })
+                elif report["pushed"]:
+                    # The push landed; confirm the site actually republished
+                    # before this run is allowed to call itself clean.
+                    print("\n>>> GitHub Pages publish")
+                    pages_err = _verify_pages_publish(commit_hash)
+                    report["pages_ok"] = pages_err is None
+                    if pages_err:
+                        print(f"  {pages_err}", file=sys.stderr)
+                        report["sources"].append({
+                            "key": "pages", "label": "GitHub Pages deploy",
+                            "label_short": "pages", "tier": "daily", "action": "error",
+                            "new_rows": 0, "changed": False, "latest_date": None,
+                            "note": "", "error": pages_err,
+                        })
             elif report["build_ok"] and dry_run:
                 # Show what would have been published.
                 diff = _git(["diff", "--stat", "--", DATA_JSON_REL])
