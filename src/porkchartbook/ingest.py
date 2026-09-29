@@ -308,7 +308,7 @@ def ingest_ers_trade_totals(conn):
     count = db.upsert_rows(conn, "ers_trade_totals", rows)
     months = [r["report_month"] for r in rows if r.get("report_month")]
     if months:
-        db.log_fetch(conn, "ers_trade", min(months), max(months), count, data_item="monthly_workbook")
+        db.log_fetch(conn, "ers_trade", min(months), max(months), count, data_item="monthly_csv")
     print(f"  ERS trade complete: {count:,} rows")
     return count
 
@@ -328,7 +328,7 @@ def ingest_ers_trade_partners(conn):
     count = db.upsert_rows(conn, "ers_trade_partner_country", rows)
     months = [r["report_month"] for r in rows if r.get("report_month")]
     if months:
-        db.log_fetch(conn, "ers_trade_partner", min(months), max(months), count, data_item="partner_country_workbook")
+        db.log_fetch(conn, "ers_trade_partner", min(months), max(months), count, data_item="partner_country_csv")
     print(f"  ERS partner-country complete: {count:,} rows")
     return count
 

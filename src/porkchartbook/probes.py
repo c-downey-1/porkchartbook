@@ -9,7 +9,7 @@ ingest when the fingerprint moves.
 
 Probes are intentionally lightweight:
   - NASS  → sum of QuickStats record COUNTS (no row payloads) across our series
-  - ERS   → HTTP HEAD on the trade workbook (Last-Modified / ETag / size)
+  - ERS   → HTTP HEAD on the pork trade CSV (URL / Last-Modified / ETag / size)
 
 Sources whose endpoints are already cheap (AMS daily, FRED CSV, AMS retail,
 Comex API) are not probed — the orchestrator just ingests them and reports
@@ -73,11 +73,15 @@ def nass_probe(year_ge=None):
 
 
 def ers_probe():
-    """HTTP HEAD the ERS pork trade workbook; fingerprint = modified|etag|size."""
+    """HTTP HEAD the ERS pork trade CSV; fingerprint = url|modified|etag|size.
+
+    The URL is part of the fingerprint because ERS serves no Last-Modified/ETag
+    for media files, and its ?v= token changes when a file is republished.
+    """
     try:
-        url = ers_trade_pork_client.discover_workbook_url()
+        url = ers_trade_pork_client.discover_trade_url()
     except Exception as exc:  # noqa: BLE001 — probe must never raise
-        return ProbeResult(value=None, ok=False, note=f"workbook URL discovery failed: {exc}")
+        return ProbeResult(value=None, ok=False, note=f"trade CSV URL discovery failed: {exc}")
 
     req = Request(
         url,
@@ -93,5 +97,5 @@ def ers_probe():
     last_modified = headers.get("Last-Modified", "")
     etag = headers.get("ETag", "")
     length = headers.get("Content-Length", "")
-    fingerprint = f"{last_modified}|{etag}|{length}"
+    fingerprint = f"{url}|{last_modified}|{etag}|{length}"
     return ProbeResult(value=fingerprint, ok=True, note=f"Last-Modified={last_modified or '?'} size={length or '?'}")
