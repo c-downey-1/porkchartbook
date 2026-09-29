@@ -3,11 +3,25 @@ ers_trade_pork_client.py — Fetch and parse USDA ERS monthly pork trade data.
 
 Forked from broilerchartbook/ers_trade_client.py and adapted for pork.
 The ERS publishes a separate pork/beef/lamb workbook at the same landing page.
+
+Failure handling mirrors ers_price_spreads_client: any fetch problem, a download
+that is not really a workbook, or a parse that yields no rows raises
+TradeFetchError instead of returning []. The old code silently fell back to a
+hardcoded media URL; when ERS rotated that path the fallback 404'd, the 404 HTML
+failed to parse, ingest swallowed the exception, and the series quietly froze at
+the last good month.
+
+ERS also reformatted these files in September 2026 ("to meet ERS Data Product
+Quality Standards") and now publishes long-form CSVs alongside the xlsx. If the
+xlsx parser stops matching, the durable fix is to switch this client to that
+long-form CSV, the way ers_price_spreads_client reads media CSVs directly. Until
+then, discovery + an ERS_PORK_TRADE_URL override + loud failures keep it honest.
 """
 
 from __future__ import annotations
 
 import io
+import os
 import re
 import zipfile
 from datetime import datetime
@@ -17,9 +31,27 @@ from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
 
+class TradeFetchError(RuntimeError):
+    """Raised when the ERS pork trade workbook can't be fetched or yields no rows."""
+
+
 ERS_TRADE_PAGE_URL = "https://www.ers.usda.gov/data-products/livestock-and-meat-international-trade-data"
-# Fallback URL — update if the ERS changes the file path
-FALLBACK_WORKBOOK_URL = "https://www.ers.usda.gov/media/5613/pork-monthly-us-trade.xlsx"
+
+# ERS rotates the media/<id> path whenever it republishes. The previous hardcoded
+# workbook (media/5613/pork-monthly-us-trade.xlsx) now 404s. Set ERS_PORK_TRADE_URL
+# to the current workbook (or CSV) URL to bypass landing-page discovery entirely —
+# useful when the scrape is blocked or ERS changes the link text.
+WORKBOOK_URL_OVERRIDE = os.environ.get("ERS_PORK_TRADE_URL", "").strip() or None
+
+# Browser-like headers: the ERS landing page sits behind anti-bot filtering that
+# rejects terse user agents, so scraping needs a realistic header set.
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
 
 XML_NS = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 REL_NS = {"r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
@@ -46,41 +78,68 @@ SECTION_CONFIG = {
     },
 }
 
-# Regex to find the pork workbook link on the ERS landing page
-XLSX_LINK_RE = re.compile(
-    r'href="([^"]*pork-monthly[^"]*\.xlsx[^"]*)"',
-    re.I,
-)
+# Match any pork .xlsx link on the ERS landing page. Broadened from the old
+# "pork-monthly" pattern because the Sept 2026 reformat may have renamed the file.
+XLSX_LINK_RE = re.compile(r'href="([^"]*pork[^"]*\.xlsx[^"]*)"', re.I)
 CELL_REF_RE = re.compile(r"([A-Z]+)")
 
 
-def _request_bytes(url, accept=None):
-    request = Request(
-        url,
-        headers={
-            "User-Agent": "porkchartbook/1.0",
-            "Accept": accept or "*/*",
-        },
-    )
-    with urlopen(request, timeout=90) as response:
-        return response.read()
+def _request_bytes(url, accept=None, headers=None):
+    hdrs = dict(headers or BROWSER_HEADERS)
+    if accept:
+        hdrs["Accept"] = accept
+    request = Request(url, headers=hdrs)
+    try:
+        with urlopen(request, timeout=90) as response:
+            return response.read()
+    except Exception as exc:  # noqa: BLE001 — any failure here means stale data
+        raise TradeFetchError(f"fetch failed ({url}): {exc}") from exc
 
 
 def discover_workbook_url():
-    """Find the current ERS pork trade workbook download URL from the landing page."""
+    """Find the current ERS pork trade workbook download URL from the landing page.
+
+    Raises TradeFetchError if no pork .xlsx link is found, rather than returning a
+    stale hardcoded URL that silently freezes the series.
+    """
     html = _request_bytes(ERS_TRADE_PAGE_URL, accept="text/html").decode("utf-8", "ignore")
-    match = XLSX_LINK_RE.search(html)
-    if not match:
-        print(f"  [ERS-pork] Could not auto-discover workbook URL, using fallback: {FALLBACK_WORKBOOK_URL}")
-        return FALLBACK_WORKBOOK_URL
-    return urljoin(ERS_TRADE_PAGE_URL, unescape(match.group(1)))
+    links = [urljoin(ERS_TRADE_PAGE_URL, unescape(m)) for m in XLSX_LINK_RE.findall(html)]
+    # Prefer the monthly US-trade workbook when several pork xlsx links are present.
+    for link in links:
+        if "monthly" in link.lower() or "trade" in link.lower():
+            return link
+    if links:
+        return links[0]
+    raise TradeFetchError(
+        "no pork .xlsx link found on the ERS landing page "
+        f"({ERS_TRADE_PAGE_URL}). ERS reformatted these files in Sept 2026 and may have "
+        "renamed the link or moved to CSV. Set ERS_PORK_TRADE_URL to the current workbook "
+        "(or CSV) URL, or switch this client to the new long-form CSV."
+    )
 
 
 def fetch_workbook_bytes(workbook_url=None):
-    """Download the current ERS pork trade workbook."""
-    resolved_url = workbook_url or discover_workbook_url()
+    """Download the current ERS pork trade workbook and confirm it is really one.
+
+    Resolution order: explicit arg, then ERS_PORK_TRADE_URL, then landing-page
+    discovery. A non-xlsx response (e.g. a 404 HTML page from a rotated media URL)
+    raises TradeFetchError instead of flowing into the parser as a bad zip.
+    """
+    resolved_url = workbook_url or WORKBOOK_URL_OVERRIDE or discover_workbook_url()
     print(f"  [ERS-pork] Downloading workbook: {resolved_url}")
-    return resolved_url, _request_bytes(resolved_url, accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    data = _request_bytes(
+        resolved_url,
+        accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    # .xlsx is a ZIP container; anything else (an HTML error page, a CSV) is not
+    # what the xlsx parser expects.
+    if data[:2] != b"PK":
+        raise TradeFetchError(
+            f"{resolved_url} did not return an .xlsx workbook (got {len(data)} bytes "
+            f"starting {data[:16]!r}). The URL likely 404'd or ERS moved/reformatted the "
+            "file (Sept 2026). Set ERS_PORK_TRADE_URL to the current workbook URL."
+        )
+    return resolved_url, data
 
 
 def _normalize_label(value):
@@ -221,15 +280,35 @@ def parse_workbook_bytes(workbook_bytes, source_url):
     return total_rows, partner_rows
 
 
+def _empty_workbook_error(workbook_url, kind):
+    return TradeFetchError(
+        f"parsed 0 {kind} rows from {workbook_url}. The workbook downloaded but no "
+        "expected sections/months were found — ERS reformatted these files in Sept 2026, "
+        "so the section headers ('Pork imports'/'Pork exports'), the month header row, or "
+        "the 'Total' label may have changed. Verify the layout (or move this client to the "
+        "new long-form CSV)."
+    )
+
+
 def fetch_trade_rows():
-    """Fetch and parse the current ERS pork workbook — totals only."""
+    """Fetch and parse the current ERS pork workbook — totals only.
+
+    Raises TradeFetchError on fetch failure or if no total rows parse.
+    """
     workbook_url, workbook_bytes = fetch_workbook_bytes()
     total_rows, _partner_rows = parse_workbook_bytes(workbook_bytes, workbook_url)
+    if not total_rows:
+        raise _empty_workbook_error(workbook_url, "total")
     return total_rows
 
 
 def fetch_partner_rows():
-    """Fetch and parse partner-country pork trade rows."""
+    """Fetch and parse partner-country pork trade rows.
+
+    Raises TradeFetchError on fetch failure or if no partner rows parse.
+    """
     workbook_url, workbook_bytes = fetch_workbook_bytes()
     _total_rows, partner_rows = parse_workbook_bytes(workbook_bytes, workbook_url)
+    if not partner_rows:
+        raise _empty_workbook_error(workbook_url, "partner-country")
     return partner_rows

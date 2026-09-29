@@ -294,17 +294,17 @@ def update_ams(conn):
 
 
 def ingest_ers_trade_totals(conn):
-    """Fetch and store ERS pork monthly trade totals."""
+    """Fetch and store ERS pork monthly trade totals.
+
+    Fetch failures and empty parses raise (see ers_trade_pork_client) so the
+    orchestrator records a real error instead of upserting nothing and leaving
+    stale data in place. Staleness of an otherwise-successful fetch is caught
+    centrally by the orchestrator's max_lag_days guard.
+    """
     print(f"\n{'=' * 60}")
     print("  ERS Pork Monthly Trade (totals)")
     print(f"{'=' * 60}")
-    try:
-        rows = ers_trade_pork_client.fetch_trade_rows()
-    except Exception as exc:
-        print(f"  ERS trade totals fetch failed: {exc}")
-        return 0
-    if not rows:
-        return 0
+    rows = ers_trade_pork_client.fetch_trade_rows()
     count = db.upsert_rows(conn, "ers_trade_totals", rows)
     months = [r["report_month"] for r in rows if r.get("report_month")]
     if months:
@@ -314,17 +314,17 @@ def ingest_ers_trade_totals(conn):
 
 
 def ingest_ers_trade_partners(conn):
-    """Fetch and store ERS pork monthly trade partner-country rows."""
+    """Fetch and store ERS pork monthly trade partner-country rows.
+
+    Fetch failures and empty parses raise (see ers_trade_pork_client) so the
+    orchestrator records a real error instead of upserting nothing and leaving
+    stale data in place. Staleness of an otherwise-successful fetch is caught
+    centrally by the orchestrator's max_lag_days guard.
+    """
     print(f"\n{'=' * 60}")
     print("  ERS Pork Monthly Trade (partner countries)")
     print(f"{'=' * 60}")
-    try:
-        rows = ers_trade_pork_client.fetch_partner_rows()
-    except Exception as exc:
-        print(f"  ERS partner-country trade fetch failed: {exc}")
-        return 0
-    if not rows:
-        return 0
+    rows = ers_trade_pork_client.fetch_partner_rows()
     count = db.upsert_rows(conn, "ers_trade_partner_country", rows)
     months = [r["report_month"] for r in rows if r.get("report_month")]
     if months:
