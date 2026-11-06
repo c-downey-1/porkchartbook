@@ -329,6 +329,7 @@ function initPorkSidebarNav() {
   );
 
   nav.innerHTML = '';
+  const chartEntries = [];
   const groups = sections.map(section => {
     const group = document.createElement('div');
     group.className = 'sidebar-group';
@@ -350,6 +351,7 @@ function initPorkSidebarNav() {
       a.href = `#${card.id}`;
       a.textContent = title;
       chartLinks.appendChild(a);
+      chartEntries.push({ card, link: a, sectionId: section.id });
     });
     group.appendChild(chartLinks);
     nav.appendChild(group);
@@ -375,14 +377,30 @@ function initPorkSidebarNav() {
 
   // Scroll-spy: the active section is the last one whose top has crossed a trigger
   // line near the top of the viewport. Deterministic, so it works for tall sections
-  // (Supply, Cost) that an intersection-ratio observer would miss.
+  // (Supply, Cost) that an intersection-ratio observer would miss. Within that
+  // section the active chart (the solid orange dot) is found the same way; at the
+  // bottom of the page the last section and chart win, since they can't scroll up
+  // to the line.
   function updateActiveSection() {
     const triggerY = window.innerHeight * 0.28;
+    const atBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 40);
     let activeId = sections[0] ? sections[0].id : null;
     sections.forEach(section => {
-      if (section.getBoundingClientRect().top <= triggerY) activeId = section.id;
+      if (atBottom || section.getBoundingClientRect().top <= triggerY) activeId = section.id;
     });
     groups.forEach(group => group.classList.toggle('is-active', group.dataset.section === activeId));
+
+    const sectionCharts = chartEntries.filter(entry => entry.sectionId === activeId);
+    let activeChart = sectionCharts[0] || null;
+    sectionCharts.forEach(entry => {
+      if (atBottom || entry.card.getBoundingClientRect().top <= triggerY) activeChart = entry;
+    });
+    chartEntries.forEach(entry => {
+      const isActive = entry === activeChart;
+      entry.link.classList.toggle('is-active', isActive);
+      if (isActive) entry.link.setAttribute('aria-current', 'true');
+      else entry.link.removeAttribute('aria-current');
+    });
   }
   window.addEventListener('scroll', updateActiveSection, { passive: true });
   window.addEventListener('resize', updateActiveSection);
